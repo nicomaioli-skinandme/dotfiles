@@ -18,8 +18,7 @@ create_system_session() {
   fi
 
   tmux new-session -d -s "system" -n "home" -c "$HOME"
-  tmux new-window -t "system" -n "tmux" -c "$HOME/.config/tmux"
-  tmux new-window -t "system" -n "nvim" -c "$HOME/.config/nvim"
+  tmux new-window -t "system" -n "dotfiles" -c "$HOME/Code/dotfiles"
   tmux select-window -t "system:home"
 }
 
