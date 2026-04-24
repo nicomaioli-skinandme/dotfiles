@@ -50,7 +50,10 @@ return {
             vim.api.nvim_create_autocmd("BufWritePre", {
               buffer = bufnr,
               callback = function()
-                vim.cmd("EslintFixAll")
+                vim.lsp.buf.code_action({
+                  context = { only = { "source.fixAll.eslint" } },
+                  apply = true,
+                })
               end,
             })
           end
