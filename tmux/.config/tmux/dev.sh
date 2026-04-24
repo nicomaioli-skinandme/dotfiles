@@ -180,7 +180,14 @@ if [ "$selected" = "+ from issue" ]; then
       --height=~50% --reverse --no-info --cycle \
       --bind=tab:down,btab:up)
     if [ "$action" = "Manually edit" ]; then
-      read -e -i "$branch" -p "New branch name: " new_branch
+      # fzf-as-input: macOS bash 3.2 lacks `read -i`, so use fzf's
+      # --print-query to get a prepopulated, editable prompt.
+      new_branch=$(fzf --print-query \
+        --query="${issue_num}-" \
+        --prompt="New branch name: " \
+        --header="Default: $branch" \
+        --height=~5% --reverse --no-info \
+        --bind='enter:print-query' < /dev/null)
       new_branch=$(printf '%s' "$new_branch" | tr -d '[:space:]')
       if [ -n "$new_branch" ] && [ "$new_branch" != "$branch" ]; then
         if [ -n "$existing_branch" ]; then
