@@ -13,6 +13,7 @@ return {
             "bashls",
             "dockerls",
             "docker_compose_language_service",
+            "gopls",
           },
         },
       },
@@ -35,12 +36,12 @@ return {
           local map = function(mode, lhs, rhs, desc)
             vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
           end
-          map("n", "gd", vim.lsp.buf.definition, "Go to definition")
-          map("n", "gD", vim.lsp.buf.declaration, "Go to declaration")
-          map("n", "gr", vim.lsp.buf.references, "References")
-          map("n", "gi", vim.lsp.buf.implementation, "Go to implementation")
-          map("n", "K", vim.lsp.buf.hover, "Hover")
-          map("n", "<leader>rn", vim.lsp.buf.rename, "Rename")
+          map("n", "<leader>ld", vim.lsp.buf.definition, "Go to definition")
+          map("n", "<leader>lD", vim.lsp.buf.declaration, "Go to declaration")
+          map("n", "<leader>lr", vim.lsp.buf.references, "References")
+          map("n", "<leader>li", vim.lsp.buf.implementation, "Go to implementation")
+          map("n", "<leader>lk", vim.lsp.buf.hover, "Hover")
+          map("n", "<leader>ln", vim.lsp.buf.rename, "Rename")
           map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code action")
           map("n", "[d", vim.diagnostic.goto_prev, "Previous diagnostic")
           map("n", "]d", vim.diagnostic.goto_next, "Next diagnostic")
@@ -62,12 +63,14 @@ return {
       vim.lsp.config("bashls", {})
       vim.lsp.config("dockerls", {})
       vim.lsp.config("docker_compose_language_service", {})
+      vim.lsp.config("gopls", {})
       vim.lsp.enable({
         "ts_ls",
         "eslint",
         "bashls",
         "dockerls",
         "docker_compose_language_service",
+        "gopls",
       })
     end,
   },

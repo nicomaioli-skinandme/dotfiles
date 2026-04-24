@@ -27,6 +27,7 @@ return {
         yaml = { "prettier" },
         sh = { "shfmt" },
         bash = { "shfmt" },
+        go = { "gofmt" },
       },
       formatters = {
         shfmt = {

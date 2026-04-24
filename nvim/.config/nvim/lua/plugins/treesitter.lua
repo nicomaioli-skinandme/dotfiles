@@ -20,6 +20,7 @@ return {
         "typescript",
         "tsx",
         "javascript",
+        "go",
       }
 
       require("nvim-treesitter").install(parsers)
@@ -40,6 +41,7 @@ return {
         "typescriptreact",
         "javascript",
         "javascriptreact",
+        "go",
       }
 
       vim.api.nvim_create_autocmd("FileType", {
