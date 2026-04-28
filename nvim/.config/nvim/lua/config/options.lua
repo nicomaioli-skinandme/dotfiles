@@ -3,7 +3,7 @@ local opt = vim.opt
 opt.clipboard = "unnamedplus"
 
 opt.number = true
-opt.relativenumber = true
+opt.relativenumber = false
 opt.signcolumn = "yes"
 opt.cursorline = true
 opt.wrap = false
