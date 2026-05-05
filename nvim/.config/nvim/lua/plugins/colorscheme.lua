@@ -15,6 +15,7 @@ return {
 				mason = true,
 				native_lsp = { enabled = true },
 				blink_cmp = true,
+				mini = { enabled = true },
 			},
 		},
 		config = function(_, opts)
