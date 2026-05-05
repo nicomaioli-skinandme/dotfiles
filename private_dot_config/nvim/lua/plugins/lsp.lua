@@ -30,6 +30,10 @@ return {
 		config = function()
 			local capabilities = require("blink.cmp").get_lsp_capabilities()
 
+			vim.diagnostic.config({
+				float = { border = "rounded" },
+			})
+
 			vim.api.nvim_create_autocmd("LspAttach", {
 				callback = function(args)
 					local bufnr = args.buf
@@ -50,7 +54,9 @@ return {
 					map("n", "<leader>li", function()
 						Snacks.picker.lsp_implementations()
 					end, "Go to implementation")
-					map("n", "<leader>lk", vim.lsp.buf.hover, "Hover")
+					map("n", "<leader>lk", function()
+						vim.lsp.buf.hover({ border = "rounded" })
+					end, "Hover")
 					map("n", "<leader>ln", vim.lsp.buf.rename, "Rename")
 					map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code action")
 					map("n", "[d", function()
