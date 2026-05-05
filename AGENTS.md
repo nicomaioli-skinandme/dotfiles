@@ -6,7 +6,7 @@ When writing bash scripts, ensure they are compatible with the version of bash r
 
 ## Neovim config
 
-Lives in `nvim/.config/nvim/` (stowed to `~/.config/nvim`). Layout:
+Lives in `private_dot_config/nvim/` (chezmoi source for `~/.config/nvim`). Layout:
 
 - `init.lua` — entry point, only `require`s `config.*` modules.
 - `lua/config/` — core editor setup: `options.lua`, `keymaps.lua`, `filetypes.lua`, `lazy.lua` (lazy.nvim bootstrap). Edit these for non-plugin behavior.
@@ -15,17 +15,16 @@ Lives in `nvim/.config/nvim/` (stowed to `~/.config/nvim`). Layout:
 
 `stylua` and `lua-language-server` are installed via Mason at `~/.local/share/nvim/mason/bin/`.
 
-Format check / fix all Lua files (run from repo root):
+Run gates against the **applied** tree at `~/.config/nvim`, not the chezmoi source:
+`lua-language-server` reads `.luarc.json`, which exists only at the applied path
+(the source has `dot_luarc.json`). So the workflow is: edit source → `chezmoi
+apply` → run gates.
 
 ```sh
-~/.local/share/nvim/mason/bin/stylua --check nvim/.config/nvim   # check
-~/.local/share/nvim/mason/bin/stylua nvim/.config/nvim           # fix
-```
-
-Run LSP diagnostics before committing changes to the nvim config:
-
-```sh
-~/.local/share/nvim/mason/bin/lua-language-server --check nvim/.config/nvim
+chezmoi apply                                                              # sync source → ~/.config/nvim
+~/.local/share/nvim/mason/bin/stylua --check ~/.config/nvim                # format check
+~/.local/share/nvim/mason/bin/stylua ~/.config/nvim                        # format fix
+~/.local/share/nvim/mason/bin/lua-language-server --check ~/.config/nvim   # LSP diagnostics
 ```
 
 Both must pass before committing nvim changes.
