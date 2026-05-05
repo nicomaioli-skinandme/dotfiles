@@ -22,7 +22,19 @@ return {
 			},
 		},
 		explorer = { enabled = true, replace_netrw = true },
-		statuscolumn = { enabled = true },
+		statuscolumn = {
+			enabled = true,
+			left = { "mark", "sign" }, -- priority of signs on the left (high to low)
+			right = { "fold", "git" }, -- priority of signs on the right (high to low)
+			folds = {
+				open = true, -- show open fold icons
+				git_hl = false, -- use Git Signs hl for fold icons
+			},
+			git = {
+				-- patterns to match Git signs
+				patterns = { "GitSign", "MiniDiffSign" },
+			},
+		},
 	},
 	keys = {
 		{
@@ -75,25 +87,25 @@ return {
 			desc = "Commands",
 		},
 		{
-			"<leader>fd",
+			"<leader>fS",
+			function()
+				Snacks.picker.lsp_workspace_symbols()
+			end,
+			desc = "Workspace symbols",
+		},
+		{
+			"<leader>xx",
 			function()
 				Snacks.picker.diagnostics()
 			end,
 			desc = "Diagnostics",
 		},
 		{
-			"<leader>fs",
+			"<leader>xs",
 			function()
 				Snacks.picker.lsp_symbols()
 			end,
 			desc = "Document symbols",
-		},
-		{
-			"<leader>fS",
-			function()
-				Snacks.picker.lsp_workspace_symbols()
-			end,
-			desc = "Workspace symbols",
 		},
 		{
 			"<leader>/",

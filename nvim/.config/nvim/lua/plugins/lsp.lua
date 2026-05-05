@@ -38,25 +38,32 @@ return {
 					local map = function(mode, lhs, rhs, desc)
 						vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
 					end
-					map("n", "<leader>ld", vim.lsp.buf.definition, "Go to definition")
-					map("n", "<leader>lD", vim.lsp.buf.declaration, "Go to declaration")
-					map("n", "<leader>lr", vim.lsp.buf.references, "References")
-					map("n", "<leader>li", vim.lsp.buf.implementation, "Go to implementation")
+					map("n", "<leader>ld", function()
+						Snacks.picker.lsp_definitions()
+					end, "Go to definition")
+					map("n", "<leader>lD", function()
+						Snacks.picker.lsp_declarations()
+					end, "Go to declaration")
+					map("n", "<leader>lr", function()
+						Snacks.picker.lsp_references()
+					end, "References")
+					map("n", "<leader>li", function()
+						Snacks.picker.lsp_implementations()
+					end, "Go to implementation")
 					map("n", "<leader>lk", vim.lsp.buf.hover, "Hover")
 					map("n", "<leader>ln", vim.lsp.buf.rename, "Rename")
 					map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, "Code action")
-					map("n", "[d", vim.diagnostic.goto_prev, "Previous diagnostic")
-					map("n", "]d", vim.diagnostic.goto_next, "Next diagnostic")
+					map("n", "[d", function()
+						vim.diagnostic.jump({ count = -1 })
+					end, "Previous diagnostic")
+					map("n", "]d", function()
+						vim.diagnostic.jump({ count = 1 })
+					end, "Next diagnostic")
 
 					if client and client.name == "eslint" then
 						vim.api.nvim_create_autocmd("BufWritePre", {
 							buffer = bufnr,
-							callback = function()
-								vim.lsp.buf.code_action({
-									context = { only = { "source.fixAll.eslint" } },
-									apply = true,
-								})
-							end,
+							command = "LspEslintFixAll",
 						})
 					end
 				end,

@@ -18,7 +18,7 @@ return {
 				{ "<leader>g", group = "git" },
 				{ "<leader>l", group = "lsp" },
 				{ "<leader>o", group = "octo" },
-				{ "<leader>x", group = "trouble" },
+				{ "<leader>x", group = "diagnostics" },
 			})
 		end,
 		keys = {
