@@ -36,6 +36,16 @@ create_andbegin_session() {
   tmux select-window -t "$session:repo"
 }
 
+# Fast-forward MONOREPO's master so freshly-created worktrees branch from
+# current state. Skip the merge when MONOREPO is on another branch — that
+# means the user has work in flight and we shouldn't touch it.
+update_master() {
+  git -C "$MONOREPO" fetch origin
+  if [ "$(git -C "$MONOREPO" symbolic-ref --short HEAD 2>/dev/null)" = "master" ]; then
+    git -C "$MONOREPO" merge --ff-only origin/master
+  fi
+}
+
 # Collect existing tmux sessions into a colon-delimited string for lookup
 active_sessions=":"
 while IFS= read -r s; do
@@ -213,7 +223,7 @@ if [ "$selected" = "+ from issue" ]; then
   fi
   echo "Branch: $branch"
 
-  git -C "$MONOREPO" fetch origin
+  update_master
 
   if [ ! -d "$WORKTREES_DIR/$branch" ]; then
     echo "Creating worktree for branch: $branch"
@@ -235,6 +245,8 @@ fi
 
 # Handle "new worktree" selection
 if [ "$selected" = "+ new worktree" ]; then
+  update_master
+
   # Collect existing worktree branch names for filtering.
   # Colon-delimited string instead of an associative array so this works
   # under stock macOS bash 3.2 (which lacks `declare -A`).
@@ -244,7 +256,7 @@ if [ "$selected" = "+ new worktree" ]; then
     existing_worktrees+="$(basename "$dir"):"
   done
 
-  # Fetch local + remote branches sorted by most recent commit
+  # List local + remote branches sorted by most recent commit
   seen=":"
   filtered=()
   while IFS= read -r ref; do
