@@ -9,7 +9,8 @@ GH_PROJECT_NUMBER=45
 GH_PROJECT_ID="PVT_kwDOBLqSu84AVoEL"
 GH_STATUS_FIELD_ID="PVTSSF_lADOBLqSu84AVoELzgN0d5A"
 GH_STATUS_IN_PROGRESS_ID="15c99605"
-GH_REPO="skinandmeprojects/andbegin"         # issues live here
+# Issues for the "+ from issue" flow can live in either repo.
+GH_ISSUE_REPOS_JSON='["skinandmeprojects/andbegin","skinandmeprojects/projects"]'
 GH_BRANCH_REPO="skinandme/andbegin-monorepo" # branches/PRs live here
 
 create_system_session() {
@@ -97,15 +98,15 @@ if [ "$selected" = "+ from issue" ]; then
   echo "Fetching current gh user..."
   me=$(gh api user -q .login)
 
-  # Fetch Backlog + Platform Backlog issues in the monorepo.
-  # Tab-delimited: num \t status \t assignees(csv) \t itemId \t title
+  # Fetch Backlog + Platform Backlog issues across the allowed repos.
+  # Tab-delimited: num \t status \t assignees(csv) \t itemId \t title \t repo
   echo "Fetching project $GH_PROJECT_NUMBER items from $GH_PROJECT_OWNER..."
   items=$(gh project item-list "$GH_PROJECT_NUMBER" --owner "$GH_PROJECT_OWNER" --format json --limit 200 |
-    jq -r --arg repo "$GH_REPO" '
+    jq -r --argjson repos "$GH_ISSUE_REPOS_JSON" '
         .items[]
-        | select(.content.repository == $repo)
+        | select(.content.repository | IN($repos[]))
         | select(.status == "📋 Backlog" or .status == "Platform Backlog")
-        | [(.content.number|tostring), .status, ((.assignees // []) | join(",")), .id, .content.title]
+        | [(.content.number|tostring), .status, ((.assignees // []) | join(",")), .id, .content.title, .content.repository]
         | @tsv')
   # Surface upstream failures that would otherwise leave $items empty and
   # look like "no matching issues".
@@ -117,7 +118,7 @@ if [ "$selected" = "+ from issue" ]; then
   fi
 
   if [ -z "$items" ]; then
-    echo "No Backlog or Platform Backlog issues in $GH_REPO."
+    echo "No Backlog or Platform Backlog issues found."
     exit 0
   fi
   echo "Found $(printf '%s\n' "$items" | wc -l | tr -d ' ') matching issues."
@@ -138,11 +139,12 @@ if [ "$selected" = "+ from issue" ]; then
   issue_status=$(printf '%s' "$selected_item" | cut -f2)
   issue_assignees=$(printf '%s' "$selected_item" | cut -f3)
   item_id=$(printf '%s' "$selected_item" | cut -f4)
+  issue_repo=$(printf '%s' "$selected_item" | cut -f6)
 
   # Assignment: unassigned → self; already mine → no-op; else → confirm and swap
   if [ -z "$issue_assignees" ]; then
     echo "Assigning issue #$issue_num to @me..."
-    gh issue edit "$issue_num" --repo "$GH_REPO" --add-assignee "@me" >/dev/null
+    gh issue edit "$issue_num" --repo "$issue_repo" --add-assignee "@me" >/dev/null
   elif [ "$issue_assignees" = "$me" ]; then
     :
   else
@@ -155,7 +157,7 @@ if [ "$selected" = "+ from issue" ]; then
       exit 1
     fi
     echo "Reassigning issue #$issue_num to @me..."
-    gh issue edit "$issue_num" --repo "$GH_REPO" \
+    gh issue edit "$issue_num" --repo "$issue_repo" \
       --remove-assignee "$issue_assignees" --add-assignee "@me" >/dev/null
   fi
 
@@ -172,7 +174,7 @@ if [ "$selected" = "+ from issue" ]; then
   # Pick up an already-linked branch if one exists; otherwise derive the
   # default name (issuenum-slug) that `gh issue develop` would create, so
   # we can offer a rename BEFORE creating the remote branch.
-  existing_branch=$(gh issue develop --list "$issue_num" --repo "$GH_REPO" 2>/dev/null | awk 'NR==1 && NF>0 {print $1}')
+  existing_branch=$(gh issue develop --list "$issue_num" --repo "$issue_repo" 2>/dev/null | awk 'NR==1 && NF>0 {print $1}')
   if [ -n "$existing_branch" ]; then
     branch="$existing_branch"
   else
@@ -214,7 +216,7 @@ if [ "$selected" = "+ from issue" ]; then
 
   if [ -z "$existing_branch" ]; then
     echo "Creating linked branch $branch for issue #$issue_num..."
-    develop_output=$(gh issue develop "$issue_num" --repo "$GH_REPO" --branch-repo "$GH_BRANCH_REPO" --name "$branch" 2>&1)
+    develop_output=$(gh issue develop "$issue_num" --repo "$issue_repo" --branch-repo "$GH_BRANCH_REPO" --name "$branch" 2>&1)
     if [ $? -ne 0 ]; then
       echo "Failed to create linked branch for issue #$issue_num." >&2
       echo "$develop_output" >&2
