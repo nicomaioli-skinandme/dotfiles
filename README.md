@@ -21,6 +21,16 @@ gh auth login
 gh auth login refresh -s project,read:project
 ```
 
+## Claude
+
+You will need the `skinandme` plugins, open `claude` and run:
+
+```
+/plugin marketplace add skinandme/claude-plugins
+/plugin install dev@skinandme
+/reload-plugins
+```
+
 # Instructions
 
 This repo is a [chezmoi](https://www.chezmoi.io/) source directory. It's kept at
@@ -53,3 +63,25 @@ git clone https://github.com/tmux-plugins/tpm ~/.local/share/tmux/plugins/tpm
 ```
 
 Then inside tmux, `prefix + I` to install the configured plugins.
+
+# Workflow
+
+## + from issue
+
+- Select an issue from the UI
+- Assigns the issue to the currently logged-in user
+- Creates a worktree
+- Creates a tmux session
+- Runs claude, passing `/dev:blitz <issue_url>` as the prompt
+
+## + new worktree
+
+This is designed for code reviews:
+
+- Select a local or remote branch form the UI
+- Creates a git worktree
+- Creates a tmux session
+
+## + delete worktree
+
+Deletes a local git worktree.
