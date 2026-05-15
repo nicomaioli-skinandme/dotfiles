@@ -25,3 +25,26 @@ require("lazy").setup({
 	checker = { enabled = true },
 	rocks = { enabled = false },
 })
+
+-- Keep the chezmoi source copy of lazy-lock.json in sync with the live one.
+-- lazy.nvim rewrites ~/.config/nvim/lazy-lock.json on install/update/sync/clean,
+-- which would otherwise make `chezmoi apply` prompt for confirmation.
+if vim.fn.executable("chezmoi") == 1 then
+	vim.api.nvim_create_autocmd("User", {
+		pattern = { "LazyInstall", "LazyUpdate", "LazySync", "LazyClean" },
+		desc = "chezmoi re-add lazy-lock.json after lazy events",
+		callback = function()
+			local lock = vim.fn.stdpath("config") .. "/lazy-lock.json"
+			vim.system({ "chezmoi", "re-add", lock }, { text = true }, function(obj)
+				if obj.code ~= 0 then
+					vim.schedule(function()
+						vim.notify(
+							"chezmoi re-add failed (" .. obj.code .. "): " .. (obj.stderr or ""),
+							vim.log.levels.WARN
+						)
+					end)
+				end
+			end)
+		end,
+	})
+end
