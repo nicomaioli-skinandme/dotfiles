@@ -6,7 +6,19 @@ return {
 		-- `'<,'>` range to the command. `<Cmd>` skips command-line processing
 		-- and would run the command with no range, losing the selection.
 		keys = {
-			{ "<leader>gs", "<cmd>Git<cr>", desc = "Git status" },
+			{
+				"<leader>gs",
+				function()
+					for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+						if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "fugitive" then
+							vim.api.nvim_buf_delete(buf, { force = false })
+							return
+						end
+					end
+					vim.cmd("Git")
+				end,
+				desc = "Toggle git status",
+			},
 
 			{ "<leader>gy", "<Cmd>.GBrowse!<CR>", desc = "Yank GitHub permalink" },
 			{ "<leader>gy", ":GBrowse!<CR>", mode = "v", desc = "Yank GitHub permalink" },
