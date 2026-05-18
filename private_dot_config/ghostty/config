@@ -3,3 +3,11 @@ theme = Catppuccin Macchiato
 cursor-style = block
 cursor-style-blink = false
 shell-integration-features = no-cursor
+
+# Cursor shader. Relative path resolves from this file's dir.
+# Source: https://github.com/sahaj-b/ghostty-cursor-shaders
+custom-shader = shaders/cursor_warp.glsl
+
+# Keep animation loop ticking even when the terminal is idle so trails
+# complete smoothly during input bursts inside tmux/nvim.
+custom-shader-animation = always
