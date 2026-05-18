@@ -60,16 +60,57 @@ local function dismiss_after(plug_keys)
 	end
 end
 
-vim.keymap.set(
-	"n",
-	"<CR>",
-	dismiss_after([[\<Plug>fugitive:\<CR>]]),
-	{ buffer = true, desc = "Open file and dismiss status" }
-)
+-- Git porcelain collapses untracked directories into a single `mydir/` entry
+-- (it never enumerates their contents), so an "Untracked" line that reads like
+-- a file may actually be a directory. We need to detect that to guard <CR>/dd.
+-- Mirrors the section/path extraction in fugitive's s:StageInfo.
+local function classify_entry()
+	local lnum = vim.fn.line(".")
+	local line = vim.fn.getline(lnum)
+	-- Hunk lines (handled natively by fugitive) — don't intercept.
+	if line:match("^[ @+%-]") then
+		return { section = nil }
+	end
+	local path = line:match("^[A-Z?] (.*)$") or line
+	local section
+	for n = lnum, 1, -1 do
+		local heading = vim.fn.getline(n):match("^(%u%l+).- %(%d+%+?%)$")
+		if heading then
+			section = heading
+			break
+		end
+	end
+	local is_dir = path:sub(-1) == "/"
+	if not is_dir and path ~= "" then
+		local ok, abs = pcall(vim.fn.FugitiveFind, path, vim.api.nvim_get_current_buf())
+		if ok and abs and abs ~= "" then
+			is_dir = vim.fn.isdirectory(abs) == 1
+		end
+	end
+	return { section = section, path = path, is_dir = is_dir }
+end
 
-vim.keymap.set(
-	"n",
-	"dd",
-	dismiss_after([[\<Plug>fugitive:dd]]),
-	{ buffer = true, desc = "Diff file and dismiss status" }
-)
+-- <CR> on an untracked directory would run `:Gedit mydir/`, which (a) opens a
+-- fugitive directory tree-view buffer, (b) triggers snacks explorer via
+-- replace_netrw on the directory BufEnter, and (c) can lcd into the dir as
+-- part of tree-view setup. Bail before any of that happens.
+vim.keymap.set("n", "<CR>", function()
+	local info = classify_entry()
+	if info.section == "Untracked" and info.is_dir then
+		vim.notify("Untracked directory — open via <leader>e or expand with =", vim.log.levels.INFO)
+		return
+	end
+	dismiss_after([[\<Plug>fugitive:\<CR>]])()
+end, { buffer = true, desc = "Open file and dismiss status" })
+
+-- Untracked entries have no index version, so fugitive's diff path produces
+-- an empty/erroring split; for untracked dirs it also cascades into the same
+-- tree-buffer/snacks explorer mess as <CR>. Bail with a message.
+vim.keymap.set("n", "dd", function()
+	local info = classify_entry()
+	if info.section == "Untracked" then
+		vim.notify("No diff available for untracked " .. (info.is_dir and "directory" or "file"), vim.log.levels.INFO)
+		return
+	end
+	dismiss_after([[\<Plug>fugitive:dd]])()
+end, { buffer = true, desc = "Diff file and dismiss status" })
