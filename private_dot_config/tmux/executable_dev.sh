@@ -27,13 +27,19 @@ create_andbegin_session() {
   local session="$1"
   local project_dir="$2"
   local claude_prompt="${3:-}"
+  local claude_name="${4:-}"
 
   tmux new-session -d -s "$session" -n "repo" -c "$project_dir"
 
   if [ -n "$claude_prompt" ]; then
-    local new_pane
+    local new_pane cmd
     new_pane=$(tmux split-window -v -t "$session:repo" -c "$project_dir" -P -F '#{pane_id}')
-    tmux send-keys -t "$new_pane" "claude \"$claude_prompt\"" C-m
+    if [ -n "$claude_name" ]; then
+      cmd=$(printf 'claude -n %q %q' "$claude_name" "$claude_prompt")
+    else
+      cmd=$(printf 'claude %q' "$claude_prompt")
+    fi
+    tmux send-keys -t "$new_pane" "$cmd" C-m
   fi
 
   tmux new-window -t "$session" -n "local" -c "$project_dir/backend"
@@ -178,6 +184,8 @@ if [ "$selected" = "+ from issue" ]; then
       --single-select-option-id "$GH_STATUS_IN_PROGRESS_ID" >/dev/null
   fi
 
+  issue_title=$(printf '%s' "$selected_item" | cut -f5)
+
   # Pick up an already-linked branch if one exists; otherwise derive the
   # default name (issuenum-slug) that `gh issue develop` would create, so
   # we can offer a rename BEFORE creating the remote branch.
@@ -185,7 +193,6 @@ if [ "$selected" = "+ from issue" ]; then
   if [ -n "$existing_branch" ]; then
     branch="$existing_branch"
   else
-    issue_title=$(printf '%s' "$selected_item" | cut -f5)
     slug=$(printf '%s' "$issue_title" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/-+/-/g; s/^-//; s/-$//')
     branch="${issue_num}-${slug}"
   fi
@@ -242,7 +249,8 @@ if [ "$selected" = "+ from issue" ]; then
   create_system_session
   if ! tmux has-session -t "$branch" 2>/dev/null; then
     create_andbegin_session "$branch" "$WORKTREES_DIR/$branch" \
-      "/dev:blitz https://github.com/$issue_repo/issues/$issue_num"
+      "/plan pull the context from the issue at https://github.com/$issue_repo/issues/$issue_num, including comments. Plan to implement, ask any relevant questions." \
+      "IMPL $issue_title"
   fi
 
   if [ -n "$TMUX" ]; then
