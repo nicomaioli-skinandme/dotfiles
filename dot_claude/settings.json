@@ -1,0 +1,19 @@
+{
+  "model": "opus[1m]",
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "dev@skinandme": true
+  },
+  "extraKnownMarketplaces": {
+    "skinandme": {
+      "source": {
+        "source": "github",
+        "repo": "skinandme/claude-plugins"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipAutoPermissionPrompt": true
+}

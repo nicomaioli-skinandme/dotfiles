@@ -28,3 +28,43 @@ chezmoi apply                                                              # syn
 ```
 
 Both must pass before committing nvim changes.
+
+## Claude config
+
+Lives in `dot_claude/` (chezmoi source for `~/.claude/`). Workflow is
+edit source → `chezmoi apply`, same as `nvim/`.
+
+Tracked:
+
+- `dot_claude/CLAUDE.md` — global instructions loaded into every session.
+- `dot_claude/settings.json` — model, `enabledPlugins`, `extraKnownMarketplaces`,
+  `effortLevel`. Hand-curated; safe to commit (no secrets).
+- `dot_claude/skills/<name>/SKILL.md` — authored skills go here.
+- `dot_claude/commands/`, `dot_claude/agents/`, `dot_claude/hooks/` — same
+  pattern when you start authoring custom slash commands, subagents, or
+  hooks. Don't pre-create empty dirs; they materialize when the first file
+  lands.
+
+Deliberately **not** tracked (runtime, cache, or sensitive — chezmoi only
+manages files we explicitly add, so these stay untouched in `~/.claude/`):
+`projects/` (conversation transcripts, can contain code/secrets),
+`plugins/`, `backups/`, `cache/`, `file-history/`, `paste-cache/`,
+`plans/`, `tasks/`, `telemetry/`, `sessions/`, `session-env/`,
+`shell-snapshots/`, `downloads/`, `ide/`, `history.jsonl`,
+`policy-limits.json`, `mcp-needs-auth-cache.json`, `.last-cleanup`. A
+`~/.claude/settings.local.json`, if it ever appears, is per-machine and
+should also stay untracked.
+
+The repo root has a separate `.claude/settings.local.json` — that's the
+**project-local** Claude settings for this dotfiles working directory (Claude
+reads it from cwd), not the global folder. It's excluded from target sync
+via `.chezmoiignore` (`/.claude/settings.local.json`). Don't confuse the
+two; don't move it under `dot_claude/`.
+
+To add a new skill:
+
+```sh
+mkdir -p ~/Code/dotfiles/dot_claude/skills/<name>
+$EDITOR ~/Code/dotfiles/dot_claude/skills/<name>/SKILL.md
+chezmoi apply        # materializes ~/.claude/skills/<name>/SKILL.md
+```

@@ -23,7 +23,13 @@ gh auth login refresh -s project,read:project
 
 ## Claude
 
-You will need the `skinandme` plugins, open `claude` and run:
+Global Claude config (`~/.claude/CLAUDE.md`, `~/.claude/settings.json`, and
+authored content under `skills/`, `commands/`, `agents/`, `hooks/`) is
+managed via `dot_claude/`. `chezmoi apply` keeps `~/.claude/` in sync.
+Runtime dirs (`projects/`, `plugins/`, `history.jsonl`, etc.) are
+intentionally not tracked — see `AGENTS.md` for the full list.
+
+You will also need the `skinandme` plugins, open `claude` and run:
 
 ```
 /plugin marketplace add skinandme/claude-plugins
@@ -44,7 +50,7 @@ mkdir -p ~/.config/chezmoi
 printf 'sourceDir = "%s/Code/dotfiles"\n' "$HOME" > ~/.config/chezmoi/chezmoi.toml
 
 chezmoi diff      # preview what will change in $HOME
-chezmoi apply -v  # materialize files into ~/.config/{nvim,tmux,ghostty}
+chezmoi apply -v  # materialize files into ~/.config/{nvim,tmux,ghostty} and ~/.claude
 ```
 
 Workflow: edit files directly in this repo, then run `chezmoi apply` to sync
