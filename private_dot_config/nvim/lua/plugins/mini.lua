@@ -27,6 +27,10 @@ return {
 			view = {
 				style = "sign",
 			},
+			mappings = {
+				goto_prev = "[c",
+				goto_next = "]c",
+			},
 		},
 		keys = {
 			{
