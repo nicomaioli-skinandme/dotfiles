@@ -72,7 +72,7 @@ Then inside tmux, `prefix + I` to install the configured plugins.
 - Assigns the issue to the currently logged-in user
 - Creates a worktree
 - Creates a tmux session
-- Runs claude, passing `/dev:blitz <issue_url>` as the prompt
+- Runs claude, in a session named after the issue, with a dedicated prompt
 
 ## + new worktree
 
