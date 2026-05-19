@@ -322,14 +322,14 @@ if [ "$selected" = "- delete worktree" ]; then
 
   if [ ${#deletable[@]} -eq 0 ]; then
     echo "No worktrees to delete."
-    exit 0
+    exec "$0" "$@"
   fi
 
   target=$(printf '%s\n' "${deletable[@]}" | fzf --prompt="Select worktree to delete: " --height=~50% --reverse --no-info --cycle --bind=tab:down,btab:up)
 
   if [ -z "$target" ]; then
     echo "No selection made."
-    exit 1
+    exec "$0" "$@"
   fi
 
   current_session=""
@@ -341,7 +341,7 @@ if [ "$selected" = "- delete worktree" ]; then
     confirm=$(printf 'No\nYes\n' | fzf --prompt="Currently in '$target'. Delete anyway? " --height=~50% --reverse --no-info --cycle --bind=tab:down,btab:up,y:last+accept,n:first+accept)
     if [ "$confirm" != "Yes" ]; then
       echo "Aborted."
-      exit 1
+      exec "$0" "$@"
     fi
     create_system_session
     tmux switch-client -t "system"
@@ -354,7 +354,7 @@ if [ "$selected" = "- delete worktree" ]; then
   git -C "$MONOREPO" worktree remove --force "$WORKTREES_DIR/$target"
 
   echo "Deleted worktree: $target"
-  exit 0
+  exec "$0" "$@"
 fi
 
 # Find the index of the selected option
