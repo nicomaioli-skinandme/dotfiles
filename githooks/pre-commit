@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command -v chezmoi >/dev/null 2>&1 || exit 0
+
+if ! out=$(chezmoi apply --dry-run 2>&1); then
+	echo "pre-commit: chezmoi apply --dry-run failed:" >&2
+	printf '%s\n' "$out" >&2
+	exit 1
+fi

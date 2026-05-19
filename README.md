@@ -1,6 +1,22 @@
 # Dotfiles
 
+## Setup
+
+```sh
+git clone <this-repo> ~/Code/dotfiles
+cd ~/Code/dotfiles
+./bootstrap.sh
+```
+
+`bootstrap.sh` is idempotent: dependency install via brew, chezmoi
+`sourceDir` config, git hooks (`core.hooksPath = githooks`), initial
+`chezmoi apply`, nvim plugin sync, and `tpm` clone. See `AGENTS.md` for
+hook behavior.
+
 ## Dependencies
+
+Mirror of `bootstrap.sh`'s `DEPS` variable — that's the canonical list.
+When updating, edit both in the same commit.
 
 - `nvim`
 - `tmux`
@@ -8,9 +24,9 @@
 - `fzf`
 - `gh`
 - `jq`
-- `rg`
-- `tree-sitter`
-- `tree-sitter-cli`
+- `ripgrep` (provides `rg`)
+- `tree-sitter` (library)
+- `tree-sitter-cli` (CLI binary; needed for nvim-treesitter `:TSUpdate`)
 
 ## GitHub
 
@@ -39,36 +55,23 @@ You will also need the `skinandme` plugins, open `claude` and run:
 
 # Instructions
 
-This repo is a [chezmoi](https://www.chezmoi.io/) source directory. It's kept at
-`~/Code/dotfiles` rather than the chezmoi default, so `sourceDir` is overridden
-in `~/.config/chezmoi/chezmoi.toml`.
-
-```sh
-brew install chezmoi
-git clone <this-repo> ~/Code/dotfiles
-mkdir -p ~/.config/chezmoi
-printf 'sourceDir = "%s/Code/dotfiles"\n' "$HOME" > ~/.config/chezmoi/chezmoi.toml
-
-chezmoi diff      # preview what will change in $HOME
-chezmoi apply -v  # materialize files into ~/.config/{nvim,tmux,ghostty} and ~/.claude
-```
+This repo is a [chezmoi](https://www.chezmoi.io/) source directory. It's kept
+at `~/Code/dotfiles` rather than the chezmoi default; `bootstrap.sh` writes
+the `sourceDir` override into `~/.config/chezmoi/chezmoi.toml`.
 
 Workflow: edit files directly in this repo, then run `chezmoi apply` to sync
-them into `$HOME`. `chezmoi managed` lists what's tracked.
+them into `$HOME`. `chezmoi managed` lists what's tracked. The
+`post-commit` hook also applies automatically when drift is present.
 
 If you want to use `private_dot_config/tmux/dev.sh`, make it executable
 (`chmod +x`) and alias it in your shell rc.
 
 ## tmux plugins (tpm)
 
-Plugin runtime state lives outside this repo at `~/.local/share/tmux/plugins/` (set via `TMUX_PLUGIN_MANAGER_PATH` in `tmux.conf`, not managed by chezmoi). Bootstrap tpm on a new machine:
-
-```sh
-mkdir -p ~/.local/share/tmux/plugins
-git clone https://github.com/tmux-plugins/tpm ~/.local/share/tmux/plugins/tpm
-```
-
-Then inside tmux, `prefix + I` to install the configured plugins.
+Plugin runtime state lives outside this repo at
+`~/.local/share/tmux/plugins/` (set via `TMUX_PLUGIN_MANAGER_PATH` in
+`tmux.conf`, not managed by chezmoi). `bootstrap.sh` clones tpm there.
+Inside tmux, `prefix + I` installs the configured plugins.
 
 # Workflow
 

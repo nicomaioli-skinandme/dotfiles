@@ -1,5 +1,30 @@
 # Agents
 
+## Bootstrap & hooks
+
+`./bootstrap.sh` (repo root) is the install entry point on a fresh machine.
+It's idempotent — safe to re-run; each section skips when already satisfied.
+
+Two tracked git hooks live in `githooks/`, wired in by bootstrap via
+`core.hooksPath = githooks`:
+
+- `pre-commit` runs `chezmoi apply --dry-run` and blocks the commit if it
+  fails (template error, broken script, malformed source). It does **not**
+  block on routine source-vs-target diff.
+- `post-commit` runs `chezmoi apply` when `chezmoi verify` reports drift,
+  so source advances via `git pull` / `git merge` / direct edits get
+  reflected in `~/`. Never fails the hook. Note: if a target file was
+  modified outside chezmoi (e.g. you edited `~/.claude/CLAUDE.md` by hand
+  and forgot `chezmoi re-add`), `apply` prompts before overwriting. In
+  an interactive commit you'll see the prompt; in a non-interactive
+  context the hook warns and exits cleanly — re-run `chezmoi apply`
+  manually to resolve.
+
+**Runtime dependencies are canonical in `bootstrap.sh`'s `DEPS` variable.**
+When adding or removing a dependency, edit `DEPS` and update the
+`README.md` Dependencies mirror in the same commit. Don't add ad-hoc
+`brew install` calls elsewhere.
+
 ## Bash scripting
 
 When writing bash scripts, ensure they are compatible with the version of bash running on the host. This host uses `bash 3.2.57` (the system bash shipped with macOS), so avoid bash 4+ features such as associative arrays (`declare -A`), `mapfile`/`readarray`, `${var^^}`/`${var,,}` case conversion, and `&>>` redirection.
