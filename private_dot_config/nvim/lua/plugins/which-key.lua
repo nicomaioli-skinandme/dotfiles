@@ -17,6 +17,7 @@ return {
 				{ "<leader>f", group = "find" },
 				{ "<leader>g", group = "git" },
 				{ "<leader>l", group = "lsp" },
+				{ "<leader>m", group = "minimap" },
 				{ "<leader>o", group = "octo" },
 				{ "<leader>x", group = "diagnostics" },
 			})

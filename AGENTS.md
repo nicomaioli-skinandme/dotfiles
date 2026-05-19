@@ -10,7 +10,7 @@ Lives in `private_dot_config/nvim/` (chezmoi source for `~/.config/nvim`). Layou
 
 - `init.lua` — entry point, only `require`s `config.*` modules.
 - `lua/config/` — core editor setup: `options.lua`, `keymaps.lua`, `filetypes.lua`, `lazy.lua` (lazy.nvim bootstrap). Edit these for non-plugin behavior.
-- `lua/plugins/` — one file per plugin (or tightly related group), each returning a lazy.nvim spec. New plugins go here as a new file; do not lump them into existing files.
+- `lua/plugins/` — one file per plugin (or tightly related group), each returning a lazy.nvim spec. New plugins go here as a new file; do not lump them into existing files. **Exceptions:** all `nvim-mini/mini.*` modules live together in `mini.lua`, and all `folke/snacks.nvim` sub-feature configuration lives together in `snacks.lua`.
 - `after/ftplugin/<ft>.lua` — filetype-local overrides (buffer-local options/keymaps). Create this directory if/when needed; prefer it over autocmds in `config/filetypes.lua` for per-buffer settings.
 
 `stylua` and `lua-language-server` are installed via Mason at `~/.local/share/nvim/mason/bin/`.

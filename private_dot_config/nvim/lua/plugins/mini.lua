@@ -38,4 +38,28 @@ return {
 			},
 		},
 	},
+	{
+		"nvim-mini/mini.map",
+		version = false,
+		dependencies = { "nvim-mini/mini.diff" },
+		keys = {
+			{
+				"<leader>mm",
+				function()
+					require("mini.map").toggle()
+				end,
+				desc = "Toggle minimap",
+			},
+		},
+		config = function()
+			local map = require("mini.map")
+			map.setup({
+				integrations = {
+					map.gen_integration.builtin_search(),
+					map.gen_integration.diff(),
+					map.gen_integration.diagnostic(),
+				},
+			})
+		end,
+	},
 }
