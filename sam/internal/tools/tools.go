@@ -6,5 +6,4 @@ package tools
 
 import (
 	_ "github.com/charmbracelet/huh"
-	_ "github.com/spf13/viper"
 )
