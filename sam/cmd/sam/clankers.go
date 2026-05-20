@@ -76,9 +76,7 @@ func writeJSONArray(w io.Writer, records []clankerRecord) error {
 	if records == nil {
 		records = []clankerRecord{}
 	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(records)
+	return json.NewEncoder(w).Encode(records)
 }
 
 func writeHumanTable(w io.Writer, records []clankerRecord) error {
