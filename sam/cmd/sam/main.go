@@ -24,6 +24,7 @@ func main() {
 	root.PersistentFlags().StringVar(&projectFlag, "project", "",
 		"project name (overrides default_project)")
 	root.AddCommand(newConfigPrintCmd())
+	root.AddCommand(newClankersCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "sam:", err)
