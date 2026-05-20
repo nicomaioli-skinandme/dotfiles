@@ -11,8 +11,10 @@ var projectFlag string
 
 func main() {
 	root := &cobra.Command{
-		Use:   "sam",
-		Short: "Slop+Me — tmux dev session manager",
+		Use:           "sam",
+		Short:         "Slop+Me — tmux dev session manager",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	root.PersistentFlags().StringVar(&projectFlag, "project", "",
 		"project name (overrides default_project)")
