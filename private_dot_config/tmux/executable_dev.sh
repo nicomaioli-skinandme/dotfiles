@@ -60,6 +60,90 @@ update_master() {
   fi
 }
 
+# `dev.sh clankers [-h|--human]` — list running `claude` processes with
+# cwd and tmux session/window/pane. JSON Lines by default; -h for an
+# aligned human-readable table.
+clankers_run() {
+  shift # drop "clankers"
+  local human=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h | --human) human=1 ;;
+      *)
+        printf 'clankers: unknown arg: %s\n' "$1" >&2
+        return 2
+        ;;
+    esac
+    shift
+  done
+
+  local panes=""
+  if command -v tmux >/dev/null 2>&1 && tmux list-panes -a >/dev/null 2>&1; then
+    panes=$(tmux list-panes -a -F \
+      $'#{pane_pid}\t#{session_name}\t#{window_index}\t#{window_name}\t#{pane_index}\t#{pane_title}')
+  fi
+
+  # 7-col TSV: pid, cwd, session, win_idx, win_name, pane_idx, pane_title.
+  # Empty tmux cols when not in tmux. Walk ancestors so claude→shell→pane_pid matches.
+  local rows
+  # -a so we include our own ancestor when this script is invoked from
+  # inside a claude session — macOS pgrep silently filters those otherwise.
+  rows=$(pgrep -ax claude | while read -r pid; do
+    local cwd cur hit s w wn p t
+    cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
+    s=""
+    w=""
+    wn=""
+    p=""
+    t=""
+    cur=$pid
+    while [ -n "$cur" ] && [ "$cur" != "1" ]; do
+      if [ -n "$panes" ]; then
+        hit=$(printf '%s\n' "$panes" | awk -F'\t' -v pp="$cur" '$1==pp{print; exit}')
+        if [ -n "$hit" ]; then
+          s=$(printf '%s' "$hit" | cut -f2)
+          w=$(printf '%s' "$hit" | cut -f3)
+          wn=$(printf '%s' "$hit" | cut -f4)
+          p=$(printf '%s' "$hit" | cut -f5)
+          t=$(printf '%s' "$hit" | cut -f6)
+          break
+        fi
+      fi
+      cur=$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ')
+    done
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$cwd" "$s" "$w" "$wn" "$p" "$t"
+  done)
+
+  if [ "$human" -eq 1 ]; then
+    {
+      printf 'PID\tCWD\tSESSION\tWIN\tWINDOW\tPANE\tTITLE\n'
+      printf '%s\n' "$rows" | awk -F'\t' 'BEGIN{OFS="\t"} NF{for(i=3;i<=NF;i++) if($i=="") $i="-"; print}'
+    } | column -t -s $'\t'
+  else
+    printf '%s\n' "$rows" | jq -R -s '
+      split("\n")
+      | map(select(length > 0) | split("\t") | {
+          pid: (.[0] | tonumber),
+          cwd: .[1],
+          tmux: (
+            if .[2] == "" then null
+            else {
+              session: .[2],
+              window:  { index: (.[3] | tonumber), name: .[4] },
+              pane:    { index: (.[5] | tonumber), title: .[6] }
+            } end
+          )
+        })'
+  fi
+}
+
+case "${1:-}" in
+  clankers)
+    clankers_run "$@"
+    exit $?
+    ;;
+esac
+
 # Collect existing tmux sessions into a colon-delimited string for lookup
 active_sessions=":"
 while IFS= read -r s; do
