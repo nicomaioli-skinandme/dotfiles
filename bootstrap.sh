@@ -9,7 +9,7 @@ REPO_ROOT=$(cd "$(dirname "$0")" && pwd)
 
 # Single source of truth for runtime Homebrew dependencies.
 # When editing this list, also update the mirror in README.md.
-DEPS="chezmoi nvim tmux fzf gh jq ripgrep tree-sitter tree-sitter-cli"
+DEPS="chezmoi nvim tmux fzf gh jq ripgrep tree-sitter tree-sitter-cli go"
 
 log() { printf '%s\n' "$*"; }
 ok()  { printf '  ok  %s\n' "$*"; }

@@ -27,6 +27,7 @@ When updating, edit both in the same commit.
 - `ripgrep` (provides `rg`)
 - `tree-sitter` (library)
 - `tree-sitter-cli` (CLI binary; needed for nvim-treesitter `:TSUpdate`)
+- `go` (builds `sam`, the tmux dev session manager, on `chezmoi apply`)
 
 ## GitHub
 

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Build sam and install to ~/.local/bin/sam.
+# The hash block below makes chezmoi re-run this script whenever any
+# tracked sam/ source file changes, and no-op when none do.
+{{- $sam := joinPath .chezmoi.sourceDir "sam" }}
+{{- range (glob (joinPath $sam "**" "*.go")) }}
+# {{ . }}: {{ include . | sha256sum }}
+{{- end }}
+{{- range (glob (joinPath $sam "Makefile")) }}
+# {{ . }}: {{ include . | sha256sum }}
+{{- end }}
+{{- range (glob (joinPath $sam "go.*")) }}
+# {{ . }}: {{ include . | sha256sum }}
+{{- end }}
+
+set -euo pipefail
+cd "{{ $sam }}"
+make install
