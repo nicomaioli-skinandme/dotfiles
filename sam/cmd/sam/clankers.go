@@ -65,21 +65,20 @@ func newClankersCmd() *cobra.Command {
 			if human {
 				return writeHumanTable(cmd.OutOrStdout(), records)
 			}
-			return writeJSONL(cmd.OutOrStdout(), records)
+			return writeJSONArray(cmd.OutOrStdout(), records)
 		},
 	}
 	cmd.Flags().BoolVar(&human, "human", false, "tab-aligned table")
 	return cmd
 }
 
-func writeJSONL(w io.Writer, records []clankerRecord) error {
-	enc := json.NewEncoder(w)
-	for _, r := range records {
-		if err := enc.Encode(r); err != nil {
-			return err
-		}
+func writeJSONArray(w io.Writer, records []clankerRecord) error {
+	if records == nil {
+		records = []clankerRecord{}
 	}
-	return nil
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(records)
 }
 
 func writeHumanTable(w io.Writer, records []clankerRecord) error {
