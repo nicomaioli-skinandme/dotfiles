@@ -35,7 +35,6 @@ func HasSession(name string) bool {
 
 // EnsureSystemSession creates the always-on "system" session if missing.
 // Two windows: home (cwd $HOME) and dotfiles (cwd ~/Code/dotfiles).
-// Ports executable_dev.sh:16-24.
 func EnsureSystemSession() error {
 	if HasSession("system") {
 		return nil

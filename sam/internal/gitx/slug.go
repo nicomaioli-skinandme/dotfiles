@@ -4,8 +4,7 @@ import "strings"
 
 // Slugify converts a string to a git-branch-friendly slug:
 // lowercase, runs of non-[a-z0-9] become a single `-`, leading and
-// trailing `-` are stripped. Ports the bash pipeline at
-// executable_dev.sh:280.
+// trailing `-` are stripped.
 func Slugify(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
