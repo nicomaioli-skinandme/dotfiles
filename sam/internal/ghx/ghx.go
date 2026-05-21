@@ -43,6 +43,77 @@ func run(args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// Issue is a lightweight view of a GitHub issue sourced from
+// `gh issue list/view` (i.e. no project-board metadata). Number/Title
+// match ProjectItem.Content; Repository is populated by the caller
+// from the request, since `--json number,title,assignees` omits it.
+type Issue struct {
+	Number     int
+	Title      string
+	Repository string
+	Assignees  []string
+}
+
+type ghAssignee struct {
+	Login string `json:"login"`
+}
+
+type ghIssueRaw struct {
+	Number    int          `json:"number"`
+	Title     string       `json:"title"`
+	Assignees []ghAssignee `json:"assignees"`
+}
+
+func (r ghIssueRaw) toIssue(repo string) Issue {
+	logins := make([]string, len(r.Assignees))
+	for i, a := range r.Assignees {
+		logins[i] = a.Login
+	}
+	return Issue{Number: r.Number, Title: r.Title, Repository: repo, Assignees: logins}
+}
+
+// IssueList returns open issues in the given repo via `gh issue list`.
+// Used by from-issue when no GitHub Project (v2) board is configured.
+func IssueList(repo string) ([]Issue, error) {
+	out, err := run(
+		"issue", "list",
+		"--repo", repo,
+		"--state", "open",
+		"--json", "number,title,assignees",
+		"--limit", "200",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var raw []ghIssueRaw
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		return nil, fmt.Errorf("parse gh issue list output: %w", err)
+	}
+	issues := make([]Issue, len(raw))
+	for i, r := range raw {
+		issues[i] = r.toIssue(repo)
+	}
+	return issues, nil
+}
+
+// IssueView fetches a single issue via `gh issue view`. Returns an
+// error when the issue doesn't exist.
+func IssueView(repo string, num int) (Issue, error) {
+	out, err := run(
+		"issue", "view", strconv.Itoa(num),
+		"--repo", repo,
+		"--json", "number,title,assignees",
+	)
+	if err != nil {
+		return Issue{}, err
+	}
+	var raw ghIssueRaw
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		return Issue{}, fmt.Errorf("parse gh issue view output: %w", err)
+	}
+	return raw.toIssue(repo), nil
+}
+
 // ProjectItems returns every item on the configured project. Filtering
 // by repo or status happens in the caller.
 func ProjectItems(cfg config.GhProject) ([]ProjectItem, error) {

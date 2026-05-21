@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -44,49 +45,29 @@ func newFromIssueCmd() *cobra.Command {
 	return cmd
 }
 
+// resolvedIssue is the single shape downstream bootstrap consumes,
+// produced by both project-board and plain-issue sources. ItemID/Status
+// stay empty when no [gh_project] is configured — the conditional
+// status write below treats that as "skip".
+type resolvedIssue struct {
+	ItemID     string
+	Status     string
+	Assignees  []string
+	Repository string
+	Number     int
+	Title      string
+}
+
 func runFromIssue(projectName string, project *config.Project, issueFlag int, repoFlag string, interactive bool) error {
-	if project.GhProject.Owner == "" || project.GhProject.Number == 0 {
-		return fmt.Errorf("project %q has no [gh_project] configured; add one to %s or run `sam project add`",
-			projectName, "~/.config/sam/config.toml")
-	}
-	items, err := ghx.ProjectItems(project.GhProject)
+	hasGhProject := project.GhProject.Owner != "" && project.GhProject.Number != 0
+
+	resolved, err := resolveIssue(project, issueFlag, repoFlag, interactive, hasGhProject)
 	if err != nil {
 		return err
 	}
-
-	var item ghx.ProjectItem
-	if interactive {
-		backlog := filterBacklog(items, project.GhProject.IssueRepos, project.GhProject.BacklogStatuses)
-		if len(backlog) == 0 {
-			return errors.New("no backlog issues found")
-		}
-		picks := make([]ui.Item, len(backlog))
-		for i, it := range backlog {
-			picks[i] = ui.Item{
-				Value: it.ID,
-				Label: fmt.Sprintf("#%d  %s  (%s)", it.Content.Number, it.Content.Title, it.Content.Repository),
-			}
-		}
-		sel, err := ui.Picker("Select backlog issue", picks)
-		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
-				return nil
-			}
-			return err
-		}
-		for _, it := range backlog {
-			if it.ID == sel.Value {
-				item = it
-				break
-			}
-		}
-	} else {
-		found, ok := findItem(items, issueFlag, repoFlag)
-		if !ok {
-			return fmt.Errorf("issue %s#%d is not on project %s/#%d",
-				repoFlag, issueFlag, project.GhProject.Owner, project.GhProject.Number)
-		}
-		item = found
+	if resolved == nil {
+		// user cancelled the picker
+		return nil
 	}
 
 	me, err := ghx.CurrentUser()
@@ -94,18 +75,18 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		return err
 	}
 
-	issueRepo := item.Content.Repository
-	issueNum := item.Content.Number
+	issueRepo := resolved.Repository
+	issueNum := resolved.Number
 
 	switch {
-	case len(item.Assignees) == 0:
+	case len(resolved.Assignees) == 0:
 		if err := ghx.IssueAddAssignee(issueRepo, issueNum, me); err != nil {
 			return err
 		}
-	case slices.Contains(item.Assignees, me):
+	case slices.Contains(resolved.Assignees, me):
 		// already mine
 	default:
-		other := item.Assignees[0]
+		other := resolved.Assignees[0]
 		if !interactive {
 			return fmt.Errorf("issue %s#%d assigned to %s; rerun interactively to reassign",
 				issueRepo, issueNum, other)
@@ -125,8 +106,8 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		}
 	}
 
-	if item.Status != statusInProgress {
-		if err := ghx.ProjectItemSetStatus(project.GhProject, item.ID, project.GhProject.InProgressID); err != nil {
+	if hasGhProject && resolved.ItemID != "" && resolved.Status != statusInProgress {
+		if err := ghx.ProjectItemSetStatus(project.GhProject, resolved.ItemID, project.GhProject.InProgressID); err != nil {
 			return err
 		}
 	}
@@ -134,7 +115,7 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 	existing, _ := ghx.IssueDevelopList(issueRepo, issueNum)
 	branch := existing
 	if branch == "" {
-		branch = fmt.Sprintf("%d-%s", issueNum, gitx.Slugify(item.Content.Title))
+		branch = fmt.Sprintf("%d-%s", issueNum, gitx.Slugify(resolved.Title))
 	}
 
 	if project.MaxBranchLen > 0 && len(branch) > project.MaxBranchLen && interactive {
@@ -202,7 +183,7 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		}
 		data := tmuxx.ClaudeData{
 			IssueNumber: issueNum,
-			IssueTitle:  item.Content.Title,
+			IssueTitle:  resolved.Title,
 			IssueRepo:   issueRepo,
 			IssueURL:    fmt.Sprintf("https://github.com/%s/issues/%d", issueRepo, issueNum),
 		}
@@ -211,6 +192,125 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		}
 	}
 	return tmuxx.SwitchOrAttach(branch)
+}
+
+// resolveIssue picks the source for the issue depending on whether a
+// GitHub Project (v2) board is configured and whether the user passed
+// --issue/--repo. Returns (nil, nil) when the interactive picker is
+// cancelled.
+func resolveIssue(project *config.Project, issueFlag int, repoFlag string, interactive, hasGhProject bool) (*resolvedIssue, error) {
+	switch {
+	case hasGhProject && interactive:
+		return resolveFromProjectBacklog(project)
+	case hasGhProject && !interactive:
+		return resolveFromProjectByFlag(project, issueFlag, repoFlag)
+	case !hasGhProject && interactive:
+		return resolveFromIssueList(project)
+	default: // !hasGhProject && !interactive
+		return resolveFromIssueView(issueFlag, repoFlag)
+	}
+}
+
+func resolveFromProjectBacklog(project *config.Project) (*resolvedIssue, error) {
+	items, err := ghx.ProjectItems(project.GhProject)
+	if err != nil {
+		return nil, err
+	}
+	backlog := filterBacklog(items, project.GhProject.IssueRepos, project.GhProject.BacklogStatuses)
+	if len(backlog) == 0 {
+		return nil, errors.New("no backlog issues found")
+	}
+	picks := make([]ui.Item, len(backlog))
+	for i, it := range backlog {
+		picks[i] = ui.Item{
+			Value: it.ID,
+			Label: fmt.Sprintf("#%d  %s  (%s)", it.Content.Number, it.Content.Title, it.Content.Repository),
+		}
+	}
+	sel, err := ui.Picker("Select backlog issue", picks)
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, it := range backlog {
+		if it.ID == sel.Value {
+			return projectItemToResolved(it), nil
+		}
+	}
+	return nil, fmt.Errorf("picker returned unknown id %q", sel.Value)
+}
+
+func resolveFromProjectByFlag(project *config.Project, issueFlag int, repoFlag string) (*resolvedIssue, error) {
+	items, err := ghx.ProjectItems(project.GhProject)
+	if err != nil {
+		return nil, err
+	}
+	found, ok := findItem(items, issueFlag, repoFlag)
+	if !ok {
+		return nil, fmt.Errorf("issue %s#%d is not on project %s/#%d",
+			repoFlag, issueFlag, project.GhProject.Owner, project.GhProject.Number)
+	}
+	return projectItemToResolved(found), nil
+}
+
+func resolveFromIssueList(project *config.Project) (*resolvedIssue, error) {
+	issues, err := ghx.IssueList(project.BranchRepo)
+	if err != nil {
+		return nil, err
+	}
+	if len(issues) == 0 {
+		return nil, fmt.Errorf("no open issues in %s", project.BranchRepo)
+	}
+	picks := make([]ui.Item, len(issues))
+	for i, it := range issues {
+		picks[i] = ui.Item{
+			Value: strconv.Itoa(it.Number),
+			Label: fmt.Sprintf("#%d  %s  (%s)", it.Number, it.Title, it.Repository),
+		}
+	}
+	sel, err := ui.Picker("Select open issue", picks)
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, it := range issues {
+		if strconv.Itoa(it.Number) == sel.Value {
+			return issueToResolved(it), nil
+		}
+	}
+	return nil, fmt.Errorf("picker returned unknown number %q", sel.Value)
+}
+
+func resolveFromIssueView(issueFlag int, repoFlag string) (*resolvedIssue, error) {
+	issue, err := ghx.IssueView(repoFlag, issueFlag)
+	if err != nil {
+		return nil, err
+	}
+	return issueToResolved(issue), nil
+}
+
+func projectItemToResolved(it ghx.ProjectItem) *resolvedIssue {
+	return &resolvedIssue{
+		ItemID:     it.ID,
+		Status:     it.Status,
+		Assignees:  it.Assignees,
+		Repository: it.Content.Repository,
+		Number:     it.Content.Number,
+		Title:      it.Content.Title,
+	}
+}
+
+func issueToResolved(it ghx.Issue) *resolvedIssue {
+	return &resolvedIssue{
+		Assignees:  it.Assignees,
+		Repository: it.Repository,
+		Number:     it.Number,
+		Title:      it.Title,
+	}
 }
 
 // filterBacklog returns items whose repo is in repos AND status is in
