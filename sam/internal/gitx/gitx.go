@@ -32,6 +32,46 @@ func Fetch(repo string) error {
 	return err
 }
 
+// IsRepo reports whether path is the work tree of a git repository.
+func IsRepo(path string) bool {
+	_, err := run(path, "rev-parse", "--git-dir")
+	return err == nil
+}
+
+// OriginRepo returns the `owner/name` slug derived from the `origin`
+// remote URL. Supports both HTTPS (https://github.com/owner/repo[.git])
+// and SSH (git@github.com:owner/repo[.git]) forms. Returns ("", nil)
+// when there's no origin remote configured.
+func OriginRepo(repo string) (string, error) {
+	out, err := run(repo, "remote", "get-url", "origin")
+	if err != nil {
+		// `git remote get-url` returns non-zero when origin is unset;
+		// caller treats "no origin" as a soft miss, not a hard error.
+		return "", nil
+	}
+	url := strings.TrimSpace(out)
+	url = strings.TrimSuffix(url, ".git")
+	if i := strings.Index(url, "github.com"); i >= 0 {
+		rest := url[i+len("github.com"):]
+		rest = strings.TrimLeft(rest, ":/")
+		return rest, nil
+	}
+	return "", nil
+}
+
+// DefaultBranch returns the branch that `origin/HEAD` points at (the
+// repo's default branch as seen by origin). Returns ("", nil) when
+// origin/HEAD isn't set locally, so the caller can fall through to a
+// prompt.
+func DefaultBranch(repo string) (string, error) {
+	out, err := run(repo, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err != nil {
+		return "", nil
+	}
+	ref := strings.TrimSpace(out)
+	return strings.TrimPrefix(ref, "refs/remotes/origin/"), nil
+}
+
 func CurrentBranch(repo string) (string, error) {
 	out, err := run(repo, "symbolic-ref", "--short", "HEAD")
 	if err != nil {

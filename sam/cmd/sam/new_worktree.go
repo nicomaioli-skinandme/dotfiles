@@ -3,12 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/setup"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 )
@@ -19,7 +19,7 @@ func newNewWorktreeCmd() *cobra.Command {
 		Short: "Create a worktree (and tmux session) for an existing branch",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			project, err := loadProject()
+			projectName, project, err := loadProject()
 			if err != nil {
 				return err
 			}
@@ -27,12 +27,12 @@ func newNewWorktreeCmd() *cobra.Command {
 			if len(args) == 1 {
 				branchArg = args[0]
 			}
-			return runNewWorktree(project, branchArg)
+			return runNewWorktree(projectName, project, branchArg)
 		},
 	}
 }
 
-func runNewWorktree(project *config.Project, branchArg string) error {
+func runNewWorktree(projectName string, project *config.Project, branchArg string) error {
 	if err := gitx.FastForwardMain(project.Repo, project.MainBranch); err != nil {
 		return err
 	}
@@ -71,8 +71,8 @@ func runNewWorktree(project *config.Project, branchArg string) error {
 		branch = sel.Value
 	}
 
-	path := filepath.Join(project.Worktrees, branch)
-	if err := gitx.WorktreeAdd(project.Repo, path, branch); err != nil {
+	path, err := setup.CreateWorktree(project, branch, 0, projectName)
+	if err != nil {
 		return err
 	}
 	if err := tmuxx.EnsureSystemSession(); err != nil {

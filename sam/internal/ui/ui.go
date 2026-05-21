@@ -85,6 +85,40 @@ func Input(title, header, initial string) (string, error) {
 	return strings.TrimSpace(v), nil
 }
 
+// MultiPicker presents a filterable multi-select list. Items are
+// matched on Label. `preselected` lists the Values to start checked.
+// Returns the Values chosen (possibly empty). ErrCancelled on abort.
+func MultiPicker(title string, items []Item, preselected []string) ([]string, error) {
+	if len(items) == 0 {
+		return nil, fmt.Errorf("ui.MultiPicker: no items")
+	}
+	options := make([]huh.Option[string], len(items))
+	for i, it := range items {
+		opt := huh.NewOption(it.Label, it.Value)
+		for _, p := range preselected {
+			if p == it.Value {
+				opt = opt.Selected(true)
+				break
+			}
+		}
+		options[i] = opt
+	}
+	var selected []string
+	err := huh.NewMultiSelect[string]().
+		Title(title).
+		Options(options...).
+		Filterable(true).
+		Value(&selected).
+		Run()
+	if err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return nil, ErrCancelled
+		}
+		return nil, err
+	}
+	return selected, nil
+}
+
 // Decorate prepends a bullet to `label` when the named session is
 // active.
 func Decorate(name, label string, active bool) string {

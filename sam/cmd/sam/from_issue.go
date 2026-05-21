@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -12,6 +10,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/setup"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 )
@@ -28,7 +27,7 @@ func newFromIssueCmd() *cobra.Command {
 		Short: "Pick a backlog issue and bootstrap a worktree + tmux session",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			project, err := loadProject()
+			projectName, project, err := loadProject()
 			if err != nil {
 				return err
 			}
@@ -36,7 +35,7 @@ func newFromIssueCmd() *cobra.Command {
 			if !interactive && (issueFlag == 0 || repoFlag == "") {
 				return errors.New("--issue and --repo must be set together")
 			}
-			return runFromIssue(project, issueFlag, repoFlag, interactive)
+			return runFromIssue(projectName, project, issueFlag, repoFlag, interactive)
 		},
 	}
 	cmd.Flags().IntVar(&issueFlag, "issue", 0, "issue number (non-interactive)")
@@ -45,7 +44,11 @@ func newFromIssueCmd() *cobra.Command {
 	return cmd
 }
 
-func runFromIssue(project *config.Project, issueFlag int, repoFlag string, interactive bool) error {
+func runFromIssue(projectName string, project *config.Project, issueFlag int, repoFlag string, interactive bool) error {
+	if project.GhProject.Owner == "" || project.GhProject.Number == 0 {
+		return fmt.Errorf("project %q has no [gh_project] configured; add one to %s or run `sam project add`",
+			projectName, "~/.config/sam/config.toml")
+	}
 	items, err := ghx.ProjectItems(project.GhProject)
 	if err != nil {
 		return err
@@ -180,12 +183,8 @@ func runFromIssue(project *config.Project, issueFlag int, repoFlag string, inter
 		return err
 	}
 
-	path := filepath.Join(project.Worktrees, branch)
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := gitx.WorktreeAdd(project.Repo, path, branch); err != nil {
-			return err
-		}
-	} else if err != nil {
+	path, err := setup.CreateWorktree(project, branch, issueNum, projectName)
+	if err != nil {
 		return err
 	}
 

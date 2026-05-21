@@ -20,7 +20,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete a worktree (and its tmux session)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			project, err := loadProject()
+			_, project, err := loadProject()
 			if err != nil {
 				return err
 			}
