@@ -34,8 +34,7 @@ type clankerRecord struct {
 }
 
 func newClankersCmd() *cobra.Command {
-	var human bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "clankers",
 		Short: "List running claude processes with tmux session/cwd",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -62,14 +61,12 @@ func newClankersCmd() *cobra.Command {
 				records = append(records, rec)
 			}
 
-			if human {
+			if humanFlag {
 				return writeHumanTable(cmd.OutOrStdout(), records)
 			}
 			return writeJSONArray(cmd.OutOrStdout(), records)
 		},
 	}
-	cmd.Flags().BoolVar(&human, "human", false, "tab-aligned table")
-	return cmd
 }
 
 func writeJSONArray(w io.Writer, records []clankerRecord) error {

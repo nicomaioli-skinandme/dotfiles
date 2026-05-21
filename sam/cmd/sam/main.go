@@ -12,7 +12,10 @@ import (
 	_ "github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 )
 
-var projectFlag string
+var (
+	projectFlag string
+	humanFlag   bool
+)
 
 func main() {
 	root := &cobra.Command{
@@ -23,6 +26,8 @@ func main() {
 	}
 	root.PersistentFlags().StringVar(&projectFlag, "project", "",
 		"project name (overrides default_project)")
+	root.PersistentFlags().BoolVarP(&humanFlag, "human", "H", false,
+		"human-readable output (table) where supported")
 	root.AddCommand(newConfigPrintCmd())
 	root.AddCommand(newClankersCmd())
 
