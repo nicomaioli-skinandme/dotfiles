@@ -34,6 +34,9 @@ func main() {
 	root.AddCommand(newListCmd())
 	root.AddCommand(newNewWorktreeCmd())
 	root.AddCommand(newDeleteCmd())
+	root.AddCommand(newMenuCmd())
+
+	maybeDefaultToMenu(root)
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "sam:", err)
