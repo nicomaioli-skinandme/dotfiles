@@ -64,8 +64,11 @@ Workflow: edit files directly in this repo, then run `chezmoi apply` to sync
 them into `$HOME`. `chezmoi managed` lists what's tracked. The
 `post-commit` hook also applies automatically when drift is present.
 
-If you want to use `private_dot_config/tmux/dev.sh`, make it executable
-(`chmod +x`) and alias it in your shell rc.
+`sam` (the tmux dev-session manager) is installed automatically to
+`~/.local/bin/sam` by the `run_onchange_install-sam.sh.tmpl` hook
+whenever any tracked file under `sam/` changes. Invoke it directly — no
+shell alias needed. Configuration lives at `~/.config/sam/config.toml`
+(template: `private_dot_config/sam/config.toml.tmpl`).
 
 ## tmux plugins (tpm)
 
@@ -76,22 +79,33 @@ Inside tmux, `prefix + I` installs the configured plugins.
 
 # Workflow
 
-## + from issue
+Run `sam` with no arguments to get the interactive picker (sessions and
+worktrees, with `●` marking active sessions). Or invoke a subcommand
+directly:
 
-- Select an issue from the UI
-- Assigns the issue to the currently logged-in user
-- Creates a worktree
-- Creates a tmux session
-- Runs claude, in a session named after the issue, with a dedicated prompt
+## `sam from-issue`
 
-## + new worktree
+- Select an issue from the configured GitHub Project
+- Assigns it to the currently logged-in user
+- Creates a worktree and a tmux session
+- Adds a `claude` pane running the project's `claude_prompt` (rendered
+  with the issue's number, title, repo, and URL)
 
-This is designed for code reviews:
+The prompt template, pane title, and target window are configured per
+project under `[projects.<name>.from_issue]` in
+`~/.config/sam/config.toml` — that file is the source of truth.
 
-- Select a local or remote branch form the UI
-- Creates a git worktree
-- Creates a tmux session
+## `sam new-worktree`
 
-## + delete worktree
+Designed for code reviews:
 
-Deletes a local git worktree.
+- Select a local or remote branch from the UI
+- Creates a git worktree and a tmux session
+
+## `sam delete`
+
+Deletes a local git worktree (and tears down its tmux session).
+
+## `sam clankers`
+
+Lists running `claude` processes; `--human` for a human-readable view.

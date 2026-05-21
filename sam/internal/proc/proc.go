@@ -1,8 +1,7 @@
 // Package proc wraps process-inspection subprocesses (pgrep, lsof, ps,
 // tmux list-panes) used by `sam clankers`. Per-pid errors from external
 // commands are swallowed and surfaced as zero values so a single dead
-// process or missing fd doesn't tank the listing, matching the bash
-// implementation in private_dot_config/tmux/executable_dev.sh.
+// process or missing fd doesn't tank the listing.
 package proc
 
 import (

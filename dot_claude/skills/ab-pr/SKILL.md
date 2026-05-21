@@ -5,7 +5,7 @@ description: Open a GitHub pull request following andbegin project conventions.
 
 # ab-pr
 
-Lightweight skill for opening a pull request when the implementation work is already done. Assumes it runs inside a `dev.sh`-driven session, where the active GitHub issue's number and title are already in the conversation context. If they aren't, prompt the user for the issue URL.
+Lightweight skill for opening a pull request when the implementation work is already done. Assumes the active GitHub issue's number and title are already in conversation context. If they aren't, prompt the user for the issue URL.
 
 This skill does NOT implement, refactor, or commit. It only drafts the PR, gets explicit user approval, and runs `gh pr create`.
 
@@ -27,7 +27,7 @@ Run these in parallel:
 
 ### 2. Resolve issue context
 
-The issue number and title should already be in conversation context (this skill runs inside `dev.sh`). Use them directly.
+The issue number and title should already be in conversation context. Use them directly.
 
 If they are missing, ask the user for the issue URL, then:
 

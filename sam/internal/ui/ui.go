@@ -86,7 +86,7 @@ func Input(title, header, initial string) (string, error) {
 }
 
 // Decorate prepends a bullet to `label` when the named session is
-// active. Ports executable_dev.sh:154-161.
+// active.
 func Decorate(name, label string, active bool) string {
 	if label == "" {
 		label = name
