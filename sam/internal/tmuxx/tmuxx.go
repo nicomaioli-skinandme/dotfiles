@@ -9,9 +9,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 )
+
+// InTmux reports whether sam is running inside a tmux client. This is
+// the sole guard against nesting tmux sessions — any code path that
+// would attach a new tmux client to the controlling terminal MUST
+// short-circuit when InTmux() is true.
+func InTmux() bool {
+	return os.Getenv("TMUX") != ""
+}
 
 func tmux(args ...string) (string, error) {
 	cmd := exec.Command("tmux", args...)
@@ -149,23 +158,33 @@ func KillSession(name string) error {
 
 // SwitchOrAttach switches the current tmux client to `name` when called
 // from inside tmux ($TMUX set), otherwise attaches the controlling
-// terminal to the session.
+// terminal to the session. The outside-tmux branch replaces sam's
+// process image with tmux via syscall.Exec so no `sam` process lingers
+// as the parent of the tmux client — without this, `killall sam` would
+// tear down the user's attached session.
 func SwitchOrAttach(name string) error {
-	if os.Getenv("TMUX") != "" {
+	if InTmux() {
 		_, err := tmux("switch-client", "-t", name)
 		return err
 	}
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	// Defense in depth: the InTmux() check above already routes inside-
+	// tmux callers to switch-client. This redundant check ensures that
+	// if a future refactor ever lets us fall through with $TMUX set, we
+	// fail loudly instead of silently nesting a tmux client.
+	if InTmux() {
+		return fmt.Errorf("refusing to attach: $TMUX is set, would nest tmux sessions")
+	}
+	bin, err := exec.LookPath("tmux")
+	if err != nil {
+		return err
+	}
+	return syscall.Exec(bin, []string{"tmux", "attach-session", "-t", name}, os.Environ())
 }
 
 // CurrentSession returns the current session name, or "" when not in
 // tmux or when tmux exits with an error.
 func CurrentSession() (string, error) {
-	if os.Getenv("TMUX") == "" {
+	if !InTmux() {
 		return "", nil
 	}
 	cmd := exec.Command("tmux", "display-message", "-p", "#S")
