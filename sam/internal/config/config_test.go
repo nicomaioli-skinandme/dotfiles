@@ -131,7 +131,7 @@ main_branch = "main"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	name, p, err := Resolve(cfg, "")
+	name, p, err := Resolve(cfg, "", "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -210,19 +210,19 @@ main_branch = "main"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	name, _, err := Resolve(cfg, "other")
+	name, _, err := Resolve(cfg, "other", "")
 	if err != nil {
 		t.Fatalf("Resolve(other): %v", err)
 	}
 	if name != "other" {
 		t.Errorf("explicit flag should win: got %q", name)
 	}
-	if _, _, err := Resolve(cfg, "ghost"); err == nil {
+	if _, _, err := Resolve(cfg, "ghost", ""); err == nil {
 		t.Error("expected error for undefined --project")
 	}
 }
 
-func TestLoad_MultiProjectNoDefault(t *testing.T) {
+func TestResolve_MultiProjectNoDefaultNoCwd(t *testing.T) {
 	body := `
 [projects.a]
 repo        = "/a"
@@ -235,11 +235,11 @@ worktrees   = "/wb"
 main_branch = "main"
 `
 	path := writeConfig(t, body)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error: multiple projects without default")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
-	if !strings.Contains(err.Error(), "default_project") {
-		t.Errorf("error should mention default_project: %v", err)
+	if _, _, err := Resolve(cfg, "", ""); err == nil {
+		t.Fatal("expected resolve error when no flag, no default, no cwd match")
 	}
 }

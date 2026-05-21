@@ -117,3 +117,113 @@ func CurrentUser() (string, error) {
 	}
 	return strings.TrimSpace(out), nil
 }
+
+// ProjectMeta fetches the GitHub Project's stable node ID (PVT_...)
+// from owner+number via `gh project view`.
+func ProjectMeta(owner string, number int) (id string, err error) {
+	out, err := run(
+		"project", "view", strconv.Itoa(number),
+		"--owner", owner,
+		"--format", "json",
+	)
+	if err != nil {
+		return "", err
+	}
+	var meta struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(out), &meta); err != nil {
+		return "", fmt.Errorf("parse gh project view output: %w", err)
+	}
+	return meta.ID, nil
+}
+
+// ProjectStatusOption is one of the choices on a single-select project
+// field (typically the Status field).
+type ProjectStatusOption struct {
+	ID   string
+	Name string
+}
+
+// ProjectStatusField captures the IDs needed to set status on items
+// and the option list that the wizard uses to ask the user which
+// option counts as "in progress" / "backlog".
+type ProjectStatusField struct {
+	FieldID string
+	Options []ProjectStatusOption
+}
+
+// ProjectStatusField fetches the Status single-select field plus its
+// options for the given project. Returns a typed error when no field
+// named "Status" exists.
+func StatusField(owner string, number int) (ProjectStatusField, error) {
+	out, err := run(
+		"project", "field-list", strconv.Itoa(number),
+		"--owner", owner,
+		"--format", "json",
+	)
+	if err != nil {
+		return ProjectStatusField{}, err
+	}
+	var resp struct {
+		Fields []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Type    string `json:"type"`
+			Options []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"options"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		return ProjectStatusField{}, fmt.Errorf("parse gh project field-list output: %w", err)
+	}
+	for _, f := range resp.Fields {
+		if f.Name != "Status" {
+			continue
+		}
+		out := ProjectStatusField{FieldID: f.ID}
+		for _, o := range f.Options {
+			out.Options = append(out.Options, ProjectStatusOption{ID: o.ID, Name: o.Name})
+		}
+		return out, nil
+	}
+	return ProjectStatusField{}, fmt.Errorf("project %s/#%d has no Status single-select field", owner, number)
+}
+
+// AuthScopes returns the OAuth scopes currently granted to the gh
+// token for github.com, parsed from `gh auth status`. Returns an
+// empty slice (and no error) when the user isn't logged in to
+// github.com — caller should also surface "not logged in" via the
+// underlying error for that case.
+func AuthScopes() ([]string, error) {
+	// `gh auth status` writes to stderr; we capture both.
+	cmd := exec.Command("gh", "auth", "status")
+	var combined bytes.Buffer
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("gh auth status: %w: %s", err, strings.TrimSpace(combined.String()))
+	}
+	out := combined.String()
+	// Look for: "- Token scopes: 'a', 'b', 'c'"
+	const marker = "Token scopes:"
+	idx := strings.Index(out, marker)
+	if idx < 0 {
+		return nil, nil
+	}
+	rest := out[idx+len(marker):]
+	if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
+		rest = rest[:nl]
+	}
+	parts := strings.Split(rest, ",")
+	scopes := make([]string, 0, len(parts))
+	for _, p := range parts {
+		s := strings.Trim(strings.TrimSpace(p), "'\"")
+		if s != "" {
+			scopes = append(scopes, s)
+		}
+	}
+	return scopes, nil
+}

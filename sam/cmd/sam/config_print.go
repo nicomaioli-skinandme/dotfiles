@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/spf13/cobra"
@@ -21,7 +22,8 @@ func newConfigPrintCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, proj, err := config.Resolve(cfg, projectFlag)
+			cwd, _ := os.Getwd()
+			name, proj, err := config.Resolve(cfg, projectFlag, cwd)
 			if err != nil {
 				return err
 			}

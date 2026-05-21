@@ -25,7 +25,7 @@ func newMenuCmd() *cobra.Command {
 		Short:  "Interactive picker (default when sam is run with no subcommand)",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			project, err := loadProject()
+			projectName, project, err := loadProject()
 			if err != nil {
 				return err
 			}
@@ -67,9 +67,9 @@ func newMenuCmd() *cobra.Command {
 
 			switch sel.Value {
 			case menuValueFromIssue:
-				return runFromIssue(project, 0, "", true)
+				return runFromIssue(projectName, project, 0, "", true)
 			case menuValueNew:
-				return runNewWorktree(project, "")
+				return runNewWorktree(projectName, project, "")
 			case menuValueDelete:
 				return runDelete(cmd.OutOrStdout(), project, "")
 			}

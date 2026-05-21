@@ -67,8 +67,12 @@ them into `$HOME`. `chezmoi managed` lists what's tracked. The
 `sam` (the tmux dev-session manager) is installed automatically to
 `~/.local/bin/sam` by the `run_onchange_install-sam.sh.tmpl` hook
 whenever any tracked file under `sam/` changes. Invoke it directly — no
-shell alias needed. Configuration lives at `~/.config/sam/config.toml`
-(template: `private_dot_config/sam/config.toml.tmpl`).
+shell alias needed.
+
+Configuration lives at `~/.config/sam/config.toml`. The file is owned
+by `sam` itself: on first run (or `sam project add`) an interactive
+wizard creates and writes it. Edit the file by hand for layout-level
+changes (tmux windows, prompt templates).
 
 ## tmux plugins (tpm)
 
@@ -109,3 +113,18 @@ Deletes a local git worktree (and tears down its tmux session).
 ## `sam clankers`
 
 Lists running `claude` processes; `--human` for a human-readable view.
+
+## `sam project add`
+
+Interactive wizard that appends a new project to
+`~/.config/sam/config.toml`. Auto-detects the repo path, main branch,
+and origin slug; offers to wire up a GitHub Project (by URL) and an
+optional post-worktree setup hook; validates `gh` scopes before
+writing. The same wizard runs automatically the first time `sam` is
+invoked on a machine with no config file.
+
+When a project has `worktree_setup` configured (a shell command
+string), it runs after `git worktree add` and before the tmux session
+is built. The hook's cwd is the new worktree and it sees these env
+vars: `SAM_BRANCH`, `SAM_WORKTREE`, `SAM_REPO`, `SAM_PROJECT`, and
+`SAM_ISSUE_NUMBER` (empty when not from `from-issue`).

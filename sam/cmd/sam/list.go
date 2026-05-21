@@ -25,7 +25,7 @@ func newListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List worktrees (plus synthetic system and main entries)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			project, err := loadProject()
+			_, project, err := loadProject()
 			if err != nil {
 				return err
 			}
