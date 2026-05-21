@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	_ "github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
 	_ "github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
 	_ "github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
@@ -30,9 +31,26 @@ func main() {
 		"human-readable output (table) where supported")
 	root.AddCommand(newConfigPrintCmd())
 	root.AddCommand(newClankersCmd())
+	root.AddCommand(newListCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "sam:", err)
 		os.Exit(1)
 	}
+}
+
+func loadProject() (*config.Project, error) {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	_, proj, err := config.Resolve(cfg, projectFlag)
+	if err != nil {
+		return nil, err
+	}
+	return proj, nil
 }
