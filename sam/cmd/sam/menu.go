@@ -67,7 +67,7 @@ func newMenuCmd() *cobra.Command {
 
 			switch sel.Value {
 			case menuValueFromIssue:
-				return errors.New("from-issue flow not yet implemented (issue #6)")
+				return runFromIssue(project, 0, "", true)
 			case menuValueNew:
 				return runNewWorktree(project, "")
 			case menuValueDelete:
