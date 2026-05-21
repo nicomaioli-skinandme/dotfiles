@@ -34,6 +34,7 @@ func main() {
 	root.AddCommand(newListCmd())
 	root.AddCommand(newNewWorktreeCmd())
 	root.AddCommand(newDeleteCmd())
+	root.AddCommand(newFromIssueCmd())
 	root.AddCommand(newMenuCmd())
 
 	maybeDefaultToMenu(root)
