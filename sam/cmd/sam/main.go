@@ -32,6 +32,7 @@ func main() {
 	root.AddCommand(newConfigPrintCmd())
 	root.AddCommand(newClankersCmd())
 	root.AddCommand(newListCmd())
+	root.AddCommand(newNewWorktreeCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "sam:", err)
