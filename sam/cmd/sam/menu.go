@@ -114,7 +114,7 @@ func shouldDefaultToMenu(args []string) bool {
 		if a == "--" {
 			return true
 		}
-		if a == "--help" || a == "-h" {
+		if a == "--help" || a == "-h" || a == "--version" {
 			return false
 		}
 		if len(a) > 0 && a[0] == '-' {

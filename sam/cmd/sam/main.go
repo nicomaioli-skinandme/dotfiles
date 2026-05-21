@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -25,9 +26,11 @@ func main() {
 	root := &cobra.Command{
 		Use:           "sam",
 		Short:         "Slop+Me — tmux dev session manager",
+		Version:       version(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.SetVersionTemplate("{{.Version}}\n")
 	root.PersistentFlags().StringVar(&projectFlag, "project", "",
 		"project name (overrides default_project)")
 	root.PersistentFlags().BoolVarP(&humanFlag, "human", "H", false,
@@ -40,6 +43,14 @@ func main() {
 	root.AddCommand(newFromIssueCmd())
 	root.AddCommand(newMenuCmd())
 	root.AddCommand(newProjectCmd())
+	root.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print the build version (short commit hash)",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			fmt.Fprintln(cmd.OutOrStdout(), root.Version)
+			return nil
+		},
+	})
 
 	maybeDefaultToMenu(root)
 
@@ -105,4 +116,21 @@ func runFirstRunWizard(path string) error {
 		return err
 	}
 	return syscall.Exec(bin, []string{"sam"}, os.Environ())
+}
+
+func version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	for _, s := range info.Settings {
+		if s.Key != "vcs.revision" {
+			continue
+		}
+		if len(s.Value) >= 7 {
+			return s.Value[:7]
+		}
+		return s.Value
+	}
+	return "unknown"
 }
