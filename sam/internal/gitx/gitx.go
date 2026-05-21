@@ -4,8 +4,11 @@ package gitx
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -91,6 +94,28 @@ func WorktreeAdd(repo, path, branch string) error {
 func WorktreeRemoveForce(repo, path string) error {
 	_, err := run(repo, "worktree", "remove", "--force", path)
 	return err
+}
+
+// Worktrees returns the basenames of immediate subdirectories of root,
+// sorted lexicographically. Non-directory entries are skipped. A
+// missing root is treated as empty (no error).
+func Worktrees(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func RevParse(repo, ref string) (string, error) {
