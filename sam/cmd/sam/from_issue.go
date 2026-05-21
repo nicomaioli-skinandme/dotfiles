@@ -179,6 +179,11 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		}
 	}
 
+	// Fetch so the branch gh just created on the remote is locally reachable.
+	if err := gitx.Fetch(project.Repo); err != nil {
+		return err
+	}
+
 	if err := gitx.FastForwardMain(project.Repo, project.MainBranch); err != nil {
 		return err
 	}
