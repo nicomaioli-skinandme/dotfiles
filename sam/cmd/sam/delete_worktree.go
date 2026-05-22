@@ -20,7 +20,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete a worktree (and its tmux session)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, project, err := loadProject()
+			_, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
@@ -28,13 +28,13 @@ func newDeleteCmd() *cobra.Command {
 			if len(args) == 1 {
 				nameArg = args[0]
 			}
-			return runDelete(cmd.OutOrStdout(), project, nameArg)
+			return runDelete(cmd.OutOrStdout(), workspace, nameArg)
 		},
 	}
 }
 
-func runDelete(out io.Writer, project *config.Project, nameArg string) error {
-	candidates, err := gitx.Worktrees(project.Worktrees)
+func runDelete(out io.Writer, workspace *config.Workspace, nameArg string) error {
+	candidates, err := gitx.Worktrees(workspace.Worktrees)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func runDelete(out io.Writer, project *config.Project, nameArg string) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("worktree %q not found under %s", target, project.Worktrees)
+			return fmt.Errorf("worktree %q not found under %s", target, workspace.Worktrees)
 		}
 	} else {
 		items := make([]ui.Item, 0, len(candidates))
@@ -95,7 +95,7 @@ func runDelete(out io.Writer, project *config.Project, nameArg string) error {
 		}
 	}
 
-	if err := gitx.WorktreeRemoveForce(project.Repo, filepath.Join(project.Worktrees, target)); err != nil {
+	if err := gitx.WorktreeRemoveForce(workspace.Repo, filepath.Join(workspace.Worktrees, target)); err != nil {
 		return err
 	}
 

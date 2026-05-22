@@ -23,20 +23,20 @@ func TestSave_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-Load: %v", err)
 	}
-	if !reflect.DeepEqual(loaded.Projects, reloaded.Projects) {
-		t.Errorf("projects mismatch after round-trip:\nbefore=%+v\nafter=%+v",
-			loaded.Projects, reloaded.Projects)
+	if !reflect.DeepEqual(loaded.Workspaces, reloaded.Workspaces) {
+		t.Errorf("workspaces mismatch after round-trip:\nbefore=%+v\nafter=%+v",
+			loaded.Workspaces, reloaded.Workspaces)
 	}
-	if loaded.DefaultProject != reloaded.DefaultProject {
-		t.Errorf("default_project mismatch: %q vs %q",
-			loaded.DefaultProject, reloaded.DefaultProject)
+	if loaded.DefaultWorkspace != reloaded.DefaultWorkspace {
+		t.Errorf("default_workspace mismatch: %q vs %q",
+			loaded.DefaultWorkspace, reloaded.DefaultWorkspace)
 	}
 }
 
 func TestSave_WorktreeSetupField(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cfg := &Config{
-		Projects: map[string]Project{
+		Workspaces: map[string]Workspace{
 			"solo": {
 				Repo:          "/x",
 				Worktrees:     "/y",
@@ -53,7 +53,7 @@ func TestSave_WorktreeSetupField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	got := reloaded.Projects["solo"].WorktreeSetup
+	got := reloaded.Workspaces["solo"].WorktreeSetup
 	if got != "touch .sam-marker" {
 		t.Errorf("worktree_setup: got %q", got)
 	}

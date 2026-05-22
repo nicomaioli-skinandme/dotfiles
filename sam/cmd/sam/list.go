@@ -25,7 +25,7 @@ func newListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List worktrees (plus synthetic system and main entries)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, project, err := loadProject()
+			_, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
@@ -33,7 +33,7 @@ func newListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			worktrees, err := gitx.Worktrees(project.Worktrees)
+			worktrees, err := gitx.Worktrees(workspace.Worktrees)
 			if err != nil {
 				return err
 			}
@@ -41,12 +41,12 @@ func newListCmd() *cobra.Command {
 			records := make([]worktreeRecord, 0, 2+len(worktrees))
 			records = append(records,
 				worktreeRecord{Name: "system", Path: home, SessionActive: tmuxx.HasSession("system")},
-				worktreeRecord{Name: project.MainBranch, Path: project.Repo, SessionActive: tmuxx.HasSession(project.MainBranch)},
+				worktreeRecord{Name: workspace.MainBranch, Path: workspace.Repo, SessionActive: tmuxx.HasSession(workspace.MainBranch)},
 			)
 			for _, w := range worktrees {
 				records = append(records, worktreeRecord{
 					Name:          w,
-					Path:          filepath.Join(project.Worktrees, w),
+					Path:          filepath.Join(workspace.Worktrees, w),
 					SessionActive: tmuxx.HasSession(w),
 				})
 			}

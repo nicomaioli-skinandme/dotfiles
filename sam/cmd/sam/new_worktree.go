@@ -19,7 +19,7 @@ func newNewWorktreeCmd() *cobra.Command {
 		Short: "Create a worktree (and tmux session) for an existing branch",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			projectName, project, err := loadProject()
+			workspaceName, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
@@ -27,27 +27,27 @@ func newNewWorktreeCmd() *cobra.Command {
 			if len(args) == 1 {
 				branchArg = args[0]
 			}
-			return runNewWorktree(projectName, project, branchArg)
+			return runNewWorktree(workspaceName, workspace, branchArg)
 		},
 	}
 }
 
-func runNewWorktree(projectName string, project *config.Project, branchArg string) error {
-	if err := gitx.FastForwardMain(project.Repo, project.MainBranch); err != nil {
+func runNewWorktree(workspaceName string, workspace *config.Workspace, branchArg string) error {
+	if err := gitx.FastForwardMain(workspace.Repo, workspace.MainBranch); err != nil {
 		return err
 	}
 
 	branch := branchArg
 	if branch == "" {
-		all, err := gitx.BranchesByRecency(project.Repo)
+		all, err := gitx.BranchesByRecency(workspace.Repo)
 		if err != nil {
 			return err
 		}
-		existing, err := gitx.Worktrees(project.Worktrees)
+		existing, err := gitx.Worktrees(workspace.Worktrees)
 		if err != nil {
 			return err
 		}
-		exclude := map[string]bool{project.MainBranch: true}
+		exclude := map[string]bool{workspace.MainBranch: true}
 		for _, w := range existing {
 			exclude[w] = true
 		}
@@ -71,14 +71,14 @@ func runNewWorktree(projectName string, project *config.Project, branchArg strin
 		branch = sel.Value
 	}
 
-	path, err := setup.CreateWorktree(project, branch, 0, projectName)
+	path, err := setup.CreateWorktree(workspace, branch, 0, workspaceName)
 	if err != nil {
 		return err
 	}
 	if err := tmuxx.EnsureSystemSession(); err != nil {
 		return err
 	}
-	if err := tmuxx.BuildSession(branch, project, path); err != nil {
+	if err := tmuxx.BuildSession(branch, workspace, path); err != nil {
 		return err
 	}
 	return tmuxx.SwitchOrAttach(branch)

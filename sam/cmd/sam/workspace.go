@@ -12,27 +12,27 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
 )
 
-func newProjectCmd() *cobra.Command {
+func newWorkspaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "project",
-		Short: "Manage sam project configuration",
+		Use:   "workspace",
+		Short: "Manage sam workspace configuration",
 	}
-	cmd.AddCommand(newProjectAddCmd())
+	cmd.AddCommand(newWorkspaceAddCmd())
 	return cmd
 }
 
-func newProjectAddCmd() *cobra.Command {
+func newWorkspaceAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add",
-		Short: "Add a project to ~/.config/sam/config.toml via guided wizard",
+		Short: "Add a workspace to ~/.config/sam/config.toml via guided wizard",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runProjectAdd(cmd.OutOrStdout())
+			return runWorkspaceAdd(cmd.OutOrStdout())
 		},
 	}
 }
 
-func runProjectAdd(out interface{ Write([]byte) (int, error) }) error {
+func runWorkspaceAdd(out interface{ Write([]byte) (int, error) }) error {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return err

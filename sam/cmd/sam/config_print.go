@@ -23,16 +23,16 @@ func newConfigPrintCmd() *cobra.Command {
 				return err
 			}
 			cwd, _ := os.Getwd()
-			name, proj, err := config.Resolve(cfg, projectFlag, cwd)
+			name, ws, err := config.Resolve(cfg, workspaceFlag, cwd)
 			if err != nil {
 				return err
 			}
 
 			out := struct {
-				Path    string          `json:"path"`
-				Project string          `json:"project"`
-				Config  *config.Project `json:"config"`
-			}{path, name, proj}
+				Path      string            `json:"path"`
+				Workspace string            `json:"workspace"`
+				Config    *config.Workspace `json:"config"`
+			}{path, name, ws}
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
 			return enc.Encode(out)

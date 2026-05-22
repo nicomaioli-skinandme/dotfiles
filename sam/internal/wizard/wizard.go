@@ -1,4 +1,4 @@
-// Package wizard implements the interactive project-setup flow that
+// Package wizard implements the interactive workspace-setup flow that
 // produces a validated entry in `~/.config/sam/config.toml`. It owns
 // only the interaction model; the caller saves the resulting config.
 package wizard
@@ -43,7 +43,7 @@ func quoted(in []string) []string {
 }
 
 // Run drives the interactive flow and returns the updated config with
-// the new project appended. `existing` may be nil (first-run case) or
+// the new workspace appended. `existing` may be nil (first-run case) or
 // the already-loaded config.
 //
 // On ui.ErrCancelled (user pressed Esc/Ctrl-C) the wizard returns
@@ -51,15 +51,15 @@ func quoted(in []string) []string {
 func Run(existing *config.Config) (*config.Config, error) {
 	cfg := existing
 	if cfg == nil {
-		cfg = &config.Config{Projects: map[string]config.Project{}}
+		cfg = &config.Config{Workspaces: map[string]config.Workspace{}}
 	}
-	if cfg.Projects == nil {
-		cfg.Projects = map[string]config.Project{}
+	if cfg.Workspaces == nil {
+		cfg.Workspaces = map[string]config.Workspace{}
 	}
 
-	fmt.Println("sam project setup")
-	if len(cfg.Projects) == 0 {
-		fmt.Println("First-time setup — let's configure a project.")
+	fmt.Println("sam workspace setup")
+	if len(cfg.Workspaces) == 0 {
+		fmt.Println("First-time setup — let's configure a workspace.")
 	}
 	fmt.Println()
 
@@ -77,16 +77,16 @@ func Run(existing *config.Config) (*config.Config, error) {
 		return nil, fmt.Errorf("%s is not a git repository", repo)
 	}
 
-	// 2. Project name.
-	name, err := ui.Input("Project name", "key under [projects.<name>]", filepath.Base(repo))
+	// 2. Workspace name.
+	name, err := ui.Input("Workspace name", "key under [workspaces.<name>]", filepath.Base(repo))
 	if err != nil {
 		return nil, err
 	}
 	if name == "" {
-		return nil, errors.New("project name cannot be empty")
+		return nil, errors.New("workspace name cannot be empty")
 	}
-	if _, exists := cfg.Projects[name]; exists {
-		return nil, fmt.Errorf("project %q already exists; pick a different name or edit %s by hand",
+	if _, exists := cfg.Workspaces[name]; exists {
+		return nil, fmt.Errorf("workspace %q already exists; pick a different name or edit %s by hand",
 			name, mustDefaultPath())
 	}
 
@@ -121,13 +121,13 @@ func Run(existing *config.Config) (*config.Config, error) {
 	}
 
 	// 6. GitHub Project (optional).
-	configureProject, err := ui.Confirm("Configure a GitHub Project?")
+	configureGhProject, err := ui.Confirm("Configure a GitHub Project?")
 	if err != nil {
 		return nil, err
 	}
 	var ghProj config.GhProject
 	scopesNeeded := []string{"repo"}
-	if configureProject {
+	if configureGhProject {
 		ghProj, err = collectGhProject(branchRepo)
 		if err != nil {
 			return nil, err
@@ -147,7 +147,7 @@ func Run(existing *config.Config) (*config.Config, error) {
 	var worktreeSetup string
 	switch hookKind.Value {
 	case "command":
-		worktreeSetup, err = ui.Input("Shell command", "runs in the new worktree dir; env: SAM_BRANCH, SAM_WORKTREE, SAM_REPO, SAM_PROJECT, SAM_ISSUE_NUMBER", "")
+		worktreeSetup, err = ui.Input("Shell command", "runs in the new worktree dir; env: SAM_BRANCH, SAM_WORKTREE, SAM_REPO, SAM_WORKSPACE, SAM_ISSUE_NUMBER", "")
 		if err != nil {
 			return nil, err
 		}
@@ -163,23 +163,23 @@ func Run(existing *config.Config) (*config.Config, error) {
 		return nil, err
 	}
 
-	// Compose the project. Defaults supply from_issue + tmux + max_branch_len.
-	proj := config.Default()
-	proj.Repo = repo
-	proj.Worktrees = worktrees
-	proj.MainBranch = mainBranch
-	proj.BranchRepo = branchRepo
-	proj.GhProject = ghProj
-	proj.WorktreeSetup = worktreeSetup
+	// Compose the workspace. Defaults supply from_issue + tmux + max_branch_len.
+	ws := config.Default()
+	ws.Repo = repo
+	ws.Worktrees = worktrees
+	ws.MainBranch = mainBranch
+	ws.BranchRepo = branchRepo
+	ws.GhProject = ghProj
+	ws.WorktreeSetup = worktreeSetup
 
-	cfg.Projects[name] = proj
-	if cfg.DefaultProject == "" && len(cfg.Projects) > 1 {
-		// Existing config previously relied on the single-project
-		// shortcut; preserve the prior project as default to avoid
-		// surprising existing users when they add a second project.
-		for n := range cfg.Projects {
+	cfg.Workspaces[name] = ws
+	if cfg.DefaultWorkspace == "" && len(cfg.Workspaces) > 1 {
+		// Existing config previously relied on the single-workspace
+		// shortcut; preserve the prior workspace as default to avoid
+		// surprising existing users when they add a second workspace.
+		for n := range cfg.Workspaces {
 			if n != name {
-				cfg.DefaultProject = n
+				cfg.DefaultWorkspace = n
 				break
 			}
 		}

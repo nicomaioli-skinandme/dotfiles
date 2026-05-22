@@ -28,7 +28,7 @@ func newFromIssueCmd() *cobra.Command {
 		Short: "Pick a backlog issue and bootstrap a worktree + tmux session",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			projectName, project, err := loadProject()
+			workspaceName, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
@@ -36,7 +36,7 @@ func newFromIssueCmd() *cobra.Command {
 			if !interactive && (issueFlag == 0 || repoFlag == "") {
 				return errors.New("--issue and --repo must be set together")
 			}
-			return runFromIssue(projectName, project, issueFlag, repoFlag, interactive)
+			return runFromIssue(workspaceName, workspace, issueFlag, repoFlag, interactive)
 		},
 	}
 	cmd.Flags().IntVar(&issueFlag, "issue", 0, "issue number (non-interactive)")
@@ -58,10 +58,10 @@ type resolvedIssue struct {
 	Title      string
 }
 
-func runFromIssue(projectName string, project *config.Project, issueFlag int, repoFlag string, interactive bool) error {
-	hasGhProject := project.GhProject.Owner != "" && project.GhProject.Number != 0
+func runFromIssue(workspaceName string, workspace *config.Workspace, issueFlag int, repoFlag string, interactive bool) error {
+	hasGhProject := workspace.GhProject.Owner != "" && workspace.GhProject.Number != 0
 
-	resolved, err := resolveIssue(project, issueFlag, repoFlag, interactive, hasGhProject)
+	resolved, err := resolveIssue(workspace, issueFlag, repoFlag, interactive, hasGhProject)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 	}
 
 	if hasGhProject && resolved.ItemID != "" && resolved.Status != statusInProgress {
-		if err := ghx.ProjectItemSetStatus(project.GhProject, resolved.ItemID, project.GhProject.InProgressID); err != nil {
+		if err := ghx.ProjectItemSetStatus(workspace.GhProject, resolved.ItemID, workspace.GhProject.InProgressID); err != nil {
 			return err
 		}
 	}
@@ -118,9 +118,9 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		branch = fmt.Sprintf("%d-%s", issueNum, gitx.Slugify(resolved.Title))
 	}
 
-	if project.MaxBranchLen > 0 && len(branch) > project.MaxBranchLen && interactive {
+	if workspace.MaxBranchLen > 0 && len(branch) > workspace.MaxBranchLen && interactive {
 		choice, err := ui.Picker(
-			fmt.Sprintf("Branch name is %d chars (limit %d)", len(branch), project.MaxBranchLen),
+			fmt.Sprintf("Branch name is %d chars (limit %d)", len(branch), workspace.MaxBranchLen),
 			[]ui.Item{
 				{Value: "keep", Label: "Keep as is"},
 				{Value: "edit", Label: "Manually edit"},
@@ -142,10 +142,10 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 			}
 			if newBranch != "" && newBranch != branch {
 				if existing != "" {
-					if err := gitx.PushRefspec(project.Repo, "origin/"+existing, newBranch); err != nil {
+					if err := gitx.PushRefspec(workspace.Repo, "origin/"+existing, newBranch); err != nil {
 						return err
 					}
-					if err := gitx.PushDelete(project.Repo, existing); err != nil {
+					if err := gitx.PushDelete(workspace.Repo, existing); err != nil {
 						return err
 					}
 				}
@@ -155,21 +155,21 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 	}
 
 	if existing == "" {
-		if err := ghx.IssueDevelop(issueRepo, project.BranchRepo, issueNum, branch); err != nil {
+		if err := ghx.IssueDevelop(issueRepo, workspace.BranchRepo, issueNum, branch); err != nil {
 			return err
 		}
 	}
 
 	// Fetch so the branch gh just created on the remote is locally reachable.
-	if err := gitx.Fetch(project.Repo); err != nil {
+	if err := gitx.Fetch(workspace.Repo); err != nil {
 		return err
 	}
 
-	if err := gitx.FastForwardMain(project.Repo, project.MainBranch); err != nil {
+	if err := gitx.FastForwardMain(workspace.Repo, workspace.MainBranch); err != nil {
 		return err
 	}
 
-	path, err := setup.CreateWorktree(project, branch, issueNum, projectName)
+	path, err := setup.CreateWorktree(workspace, branch, issueNum, workspaceName)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 		return err
 	}
 	if !tmuxx.HasSession(branch) {
-		if err := tmuxx.BuildSession(branch, project, path); err != nil {
+		if err := tmuxx.BuildSession(branch, workspace, path); err != nil {
 			return err
 		}
 		data := tmuxx.ClaudeData{
@@ -187,7 +187,7 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 			IssueRepo:   issueRepo,
 			IssueURL:    fmt.Sprintf("https://github.com/%s/issues/%d", issueRepo, issueNum),
 		}
-		if err := tmuxx.AddClaudePane(branch, project, data); err != nil {
+		if err := tmuxx.AddClaudePane(branch, workspace, data); err != nil {
 			return err
 		}
 	}
@@ -198,25 +198,25 @@ func runFromIssue(projectName string, project *config.Project, issueFlag int, re
 // GitHub Project (v2) board is configured and whether the user passed
 // --issue/--repo. Returns (nil, nil) when the interactive picker is
 // cancelled.
-func resolveIssue(project *config.Project, issueFlag int, repoFlag string, interactive, hasGhProject bool) (*resolvedIssue, error) {
+func resolveIssue(workspace *config.Workspace, issueFlag int, repoFlag string, interactive, hasGhProject bool) (*resolvedIssue, error) {
 	switch {
 	case hasGhProject && interactive:
-		return resolveFromProjectBacklog(project)
+		return resolveFromProjectBacklog(workspace)
 	case hasGhProject && !interactive:
-		return resolveFromProjectByFlag(project, issueFlag, repoFlag)
+		return resolveFromProjectByFlag(workspace, issueFlag, repoFlag)
 	case !hasGhProject && interactive:
-		return resolveFromIssueList(project)
+		return resolveFromIssueList(workspace)
 	default: // !hasGhProject && !interactive
 		return resolveFromIssueView(issueFlag, repoFlag)
 	}
 }
 
-func resolveFromProjectBacklog(project *config.Project) (*resolvedIssue, error) {
-	items, err := ghx.ProjectItems(project.GhProject)
+func resolveFromProjectBacklog(workspace *config.Workspace) (*resolvedIssue, error) {
+	items, err := ghx.ProjectItems(workspace.GhProject)
 	if err != nil {
 		return nil, err
 	}
-	backlog := filterBacklog(items, project.GhProject.IssueRepos, project.GhProject.BacklogStatuses)
+	backlog := filterBacklog(items, workspace.GhProject.IssueRepos, workspace.GhProject.BacklogStatuses)
 	if len(backlog) == 0 {
 		return nil, errors.New("no backlog issues found")
 	}
@@ -242,26 +242,26 @@ func resolveFromProjectBacklog(project *config.Project) (*resolvedIssue, error) 
 	return nil, fmt.Errorf("picker returned unknown id %q", sel.Value)
 }
 
-func resolveFromProjectByFlag(project *config.Project, issueFlag int, repoFlag string) (*resolvedIssue, error) {
-	items, err := ghx.ProjectItems(project.GhProject)
+func resolveFromProjectByFlag(workspace *config.Workspace, issueFlag int, repoFlag string) (*resolvedIssue, error) {
+	items, err := ghx.ProjectItems(workspace.GhProject)
 	if err != nil {
 		return nil, err
 	}
 	found, ok := findItem(items, issueFlag, repoFlag)
 	if !ok {
 		return nil, fmt.Errorf("issue %s#%d is not on project %s/#%d",
-			repoFlag, issueFlag, project.GhProject.Owner, project.GhProject.Number)
+			repoFlag, issueFlag, workspace.GhProject.Owner, workspace.GhProject.Number)
 	}
 	return projectItemToResolved(found), nil
 }
 
-func resolveFromIssueList(project *config.Project) (*resolvedIssue, error) {
-	issues, err := ghx.IssueList(project.BranchRepo)
+func resolveFromIssueList(workspace *config.Workspace) (*resolvedIssue, error) {
+	issues, err := ghx.IssueList(workspace.BranchRepo)
 	if err != nil {
 		return nil, err
 	}
 	if len(issues) == 0 {
-		return nil, fmt.Errorf("no open issues in %s", project.BranchRepo)
+		return nil, fmt.Errorf("no open issues in %s", workspace.BranchRepo)
 	}
 	picks := make([]ui.Item, len(issues))
 	for i, it := range issues {

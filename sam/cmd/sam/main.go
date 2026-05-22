@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	projectFlag string
-	humanFlag   bool
+	workspaceFlag string
+	humanFlag     bool
 )
 
 func main() {
@@ -31,8 +31,8 @@ func main() {
 		SilenceErrors: true,
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.PersistentFlags().StringVar(&projectFlag, "project", "",
-		"project name (overrides default_project)")
+	root.PersistentFlags().StringVar(&workspaceFlag, "workspace", "",
+		"workspace name (overrides default_workspace)")
 	root.PersistentFlags().BoolVarP(&humanFlag, "human", "H", false,
 		"human-readable output (table) where supported")
 	root.AddCommand(newConfigPrintCmd())
@@ -42,7 +42,7 @@ func main() {
 	root.AddCommand(newDeleteCmd())
 	root.AddCommand(newFromIssueCmd())
 	root.AddCommand(newMenuCmd())
-	root.AddCommand(newProjectCmd())
+	root.AddCommand(newWorkspaceCmd())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the build version (short commit hash)",
@@ -60,15 +60,15 @@ func main() {
 	}
 }
 
-// loadProject resolves the active project for the current invocation.
-// Returns (name, *Project) so callers that need the project name (e.g.
+// loadWorkspace resolves the active workspace for the current invocation.
+// Returns (name, *Workspace) so callers that need the workspace name (e.g.
 // the worktree-setup hook) don't have to look it up again.
 //
 // First-run side effect: when ~/.config/sam/config.toml is missing,
 // runs the setup wizard, saves the result, and re-execs `sam` with
 // no arguments so the user lands in a clean menu. This call does not
 // return in that case.
-func loadProject() (string, *config.Project, error) {
+func loadWorkspace() (string, *config.Workspace, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return "", nil, err
@@ -88,11 +88,11 @@ func loadProject() (string, *config.Project, error) {
 		return "", nil, err
 	}
 	cwd, _ := os.Getwd()
-	name, proj, err := config.Resolve(cfg, projectFlag, cwd)
+	name, ws, err := config.Resolve(cfg, workspaceFlag, cwd)
 	if err != nil {
 		return "", nil, err
 	}
-	return name, proj, nil
+	return name, ws, nil
 }
 
 func runFirstRunWizard(path string) error {

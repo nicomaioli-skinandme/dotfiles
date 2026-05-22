@@ -14,11 +14,11 @@ import (
 )
 
 type Config struct {
-	DefaultProject string             `mapstructure:"default_project" toml:"default_project,omitempty"`
-	Projects       map[string]Project `mapstructure:"projects" toml:"projects"`
+	DefaultWorkspace string               `mapstructure:"default_workspace" toml:"default_workspace,omitempty"`
+	Workspaces       map[string]Workspace `mapstructure:"workspaces" toml:"workspaces"`
 }
 
-type Project struct {
+type Workspace struct {
 	Repo          string     `mapstructure:"repo" toml:"repo"`
 	Worktrees     string     `mapstructure:"worktrees" toml:"worktrees"`
 	MainBranch    string     `mapstructure:"main_branch" toml:"main_branch"`
@@ -62,16 +62,16 @@ type Pane struct {
 }
 
 // ErrInsideRepo is returned by Resolve when cwd is a descendant of a
-// project's repo (but not the repo root) and no other resolution
+// workspace's repo (but not the repo root) and no other resolution
 // mechanism applied. The caller surfaces a guidance message and exits.
 type ErrInsideRepo struct {
-	Project string
-	Repo    string
+	Workspace string
+	Repo      string
 }
 
 func (e *ErrInsideRepo) Error() string {
 	return fmt.Sprintf("invoked inside %s repo (%s); cd to the repo root or a worktree",
-		e.Project, e.Repo)
+		e.Workspace, e.Repo)
 }
 
 // DefaultPath returns the default config location: $HOME/.config/sam/config.toml.
@@ -107,56 +107,56 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Resolve picks which project to use given an optional explicit name
-// (from --project) and the caller's cwd. Resolution order:
+// Resolve picks which workspace to use given an optional explicit name
+// (from --workspace) and the caller's cwd. Resolution order:
 //  1. explicit
-//  2. cwd matches a project's repo or sits inside its worktrees dir
-//  3. cwd is inside a project's repo (but not at root) → ErrInsideRepo
-//  4. default_project
-//  5. single-project shortcut
-func Resolve(cfg *Config, explicit, cwd string) (string, *Project, error) {
+//  2. cwd matches a workspace's repo or sits inside its worktrees dir
+//  3. cwd is inside a workspace's repo (but not at root) → ErrInsideRepo
+//  4. default_workspace
+//  5. single-workspace shortcut
+func Resolve(cfg *Config, explicit, cwd string) (string, *Workspace, error) {
 	if explicit != "" {
-		p, ok := cfg.Projects[explicit]
+		w, ok := cfg.Workspaces[explicit]
 		if !ok {
-			return "", nil, fmt.Errorf("project %q not found in config (have: %s)",
-				explicit, projectNames(cfg))
+			return "", nil, fmt.Errorf("workspace %q not found in config (have: %s)",
+				explicit, workspaceNames(cfg))
 		}
-		return explicit, &p, nil
+		return explicit, &w, nil
 	}
 
 	if cwd != "" {
 		cwd = filepath.Clean(cwd)
 		// Pass 1: exact repo match or descendant of worktrees.
-		for name, p := range cfg.Projects {
-			repo := filepath.Clean(p.Repo)
-			wt := filepath.Clean(p.Worktrees)
+		for name, w := range cfg.Workspaces {
+			repo := filepath.Clean(w.Repo)
+			wt := filepath.Clean(w.Worktrees)
 			if cwd == repo {
-				return name, &p, nil
+				return name, &w, nil
 			}
 			if isDescendant(cwd, wt) {
-				return name, &p, nil
+				return name, &w, nil
 			}
 		}
 		// Pass 2: descendant of repo (but not at root) → guidance error.
-		for name, p := range cfg.Projects {
-			repo := filepath.Clean(p.Repo)
+		for name, w := range cfg.Workspaces {
+			repo := filepath.Clean(w.Repo)
 			if isDescendant(cwd, repo) {
-				return "", nil, &ErrInsideRepo{Project: name, Repo: repo}
+				return "", nil, &ErrInsideRepo{Workspace: name, Repo: repo}
 			}
 		}
 	}
 
-	if cfg.DefaultProject != "" {
-		p := cfg.Projects[cfg.DefaultProject]
-		return cfg.DefaultProject, &p, nil
+	if cfg.DefaultWorkspace != "" {
+		w := cfg.Workspaces[cfg.DefaultWorkspace]
+		return cfg.DefaultWorkspace, &w, nil
 	}
-	if len(cfg.Projects) == 1 {
-		for name, p := range cfg.Projects {
-			return name, &p, nil
+	if len(cfg.Workspaces) == 1 {
+		for name, w := range cfg.Workspaces {
+			return name, &w, nil
 		}
 	}
-	return "", nil, fmt.Errorf("no project matches this directory: pass --project, set default_project, or run `sam project add` (have: %s)",
-		projectNames(cfg))
+	return "", nil, fmt.Errorf("no workspace matches this directory: pass --workspace, set default_workspace, or run `sam workspace add` (have: %s)",
+		workspaceNames(cfg))
 }
 
 // IsInsideRepo reports whether err is the in-repo-subdir guidance error.
@@ -175,11 +175,11 @@ func isDescendant(child, parent string) bool {
 	return strings.HasPrefix(child, parent+sep)
 }
 
-// Default returns a Project with sensible defaults for the fields the
+// Default returns a Workspace with sensible defaults for the fields the
 // wizard fills silently (from_issue, tmux, max_branch_len). Callers
 // overlay user-supplied values on top.
-func Default() Project {
-	return Project{
+func Default() Workspace {
+	return Workspace{
 		MaxBranchLen: 20,
 		FromIssue: FromIssue{
 			ClaudePrompt:    "/plan pull the context from {{ .IssueURL }}, including comments. Plan to implement, ask any relevant questions.",
@@ -197,10 +197,10 @@ func expandPaths(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	for name, p := range cfg.Projects {
-		p.Repo = expandHome(p.Repo, home)
-		p.Worktrees = expandHome(p.Worktrees, home)
-		cfg.Projects[name] = p
+	for name, w := range cfg.Workspaces {
+		w.Repo = expandHome(w.Repo, home)
+		w.Worktrees = expandHome(w.Worktrees, home)
+		cfg.Workspaces[name] = w
 	}
 	return nil
 }
@@ -216,46 +216,46 @@ func expandHome(path, home string) string {
 }
 
 func validate(cfg *Config) error {
-	if len(cfg.Projects) == 0 {
-		return fmt.Errorf("no projects configured")
+	if len(cfg.Workspaces) == 0 {
+		return fmt.Errorf("no workspaces configured")
 	}
-	if cfg.DefaultProject != "" {
-		if _, ok := cfg.Projects[cfg.DefaultProject]; !ok {
-			return fmt.Errorf("default_project %q is not defined (have: %s)",
-				cfg.DefaultProject, projectNames(cfg))
+	if cfg.DefaultWorkspace != "" {
+		if _, ok := cfg.Workspaces[cfg.DefaultWorkspace]; !ok {
+			return fmt.Errorf("default_workspace %q is not defined (have: %s)",
+				cfg.DefaultWorkspace, workspaceNames(cfg))
 		}
 	}
 
-	for name, p := range cfg.Projects {
-		if p.Repo == "" {
-			return fmt.Errorf("project %q: repo is required", name)
+	for name, w := range cfg.Workspaces {
+		if w.Repo == "" {
+			return fmt.Errorf("workspace %q: repo is required", name)
 		}
-		if p.Worktrees == "" {
-			return fmt.Errorf("project %q: worktrees is required", name)
+		if w.Worktrees == "" {
+			return fmt.Errorf("workspace %q: worktrees is required", name)
 		}
-		if p.MainBranch == "" {
-			return fmt.Errorf("project %q: main_branch is required", name)
+		if w.MainBranch == "" {
+			return fmt.Errorf("workspace %q: main_branch is required", name)
 		}
-		if p.FromIssue.RepoWindow != "" {
+		if w.FromIssue.RepoWindow != "" {
 			found := false
-			for _, w := range p.Tmux.Windows {
-				if w.Name == p.FromIssue.RepoWindow {
+			for _, win := range w.Tmux.Windows {
+				if win.Name == w.FromIssue.RepoWindow {
 					found = true
 					break
 				}
 			}
 			if !found {
-				return fmt.Errorf("project %q: from_issue.repo_window %q does not match any tmux window",
-					name, p.FromIssue.RepoWindow)
+				return fmt.Errorf("workspace %q: from_issue.repo_window %q does not match any tmux window",
+					name, w.FromIssue.RepoWindow)
 			}
 		}
 	}
 	return nil
 }
 
-func projectNames(cfg *Config) string {
-	names := make([]string, 0, len(cfg.Projects))
-	for n := range cfg.Projects {
+func workspaceNames(cfg *Config) string {
+	names := make([]string, 0, len(cfg.Workspaces))
+	for n := range cfg.Workspaces {
 		names = append(names, n)
 	}
 	sort.Strings(names)

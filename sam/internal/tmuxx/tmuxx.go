@@ -1,5 +1,5 @@
 // Package tmuxx wraps tmux subprocess invocations for session/pane
-// manipulation. Layout building is driven by config.Project.Tmux.
+// manipulation. Layout building is driven by config.Workspace.Tmux.
 package tmuxx
 
 import (
@@ -75,14 +75,14 @@ func resolveCwd(baseDir, rel string) string {
 	return filepath.Join(baseDir, rel)
 }
 
-// BuildSession creates `name` and applies project.Tmux.Windows. The
+// BuildSession creates `name` and applies workspace.Tmux.Windows. The
 // first window is created with new-session; subsequent windows via
 // new-window. Each pane is added with split-window.
-func BuildSession(name string, project *config.Project, baseDir string) error {
-	if len(project.Tmux.Windows) == 0 {
-		return fmt.Errorf("project has no tmux windows configured")
+func BuildSession(name string, workspace *config.Workspace, baseDir string) error {
+	if len(workspace.Tmux.Windows) == 0 {
+		return fmt.Errorf("workspace has no tmux windows configured")
 	}
-	for i, w := range project.Tmux.Windows {
+	for i, w := range workspace.Tmux.Windows {
 		winCwd := resolveCwd(baseDir, w.Cwd)
 		if i == 0 {
 			if _, err := tmux("new-session", "-d", "-s", name, "-n", w.Name, "-c", winCwd); err != nil {
@@ -104,29 +104,29 @@ func BuildSession(name string, project *config.Project, baseDir string) error {
 			}
 		}
 	}
-	first := project.Tmux.Windows[0].Name
+	first := workspace.Tmux.Windows[0].Name
 	if _, err := tmux("select-window", "-t", name+":"+first); err != nil {
 		return err
 	}
 	return nil
 }
 
-// AddClaudePane splits project.FromIssue.RepoWindow vertically and runs
+// AddClaudePane splits workspace.FromIssue.RepoWindow vertically and runs
 // `claude -n <title> <prompt>` (or `claude <prompt>` when title is
 // empty) in the new pane.
-func AddClaudePane(session string, project *config.Project, data ClaudeData) error {
-	if project.FromIssue.RepoWindow == "" {
+func AddClaudePane(session string, workspace *config.Workspace, data ClaudeData) error {
+	if workspace.FromIssue.RepoWindow == "" {
 		return fmt.Errorf("from_issue.repo_window is not configured")
 	}
-	prompt, err := RenderPrompt(project.FromIssue.ClaudePrompt, data)
+	prompt, err := RenderPrompt(workspace.FromIssue.ClaudePrompt, data)
 	if err != nil {
 		return err
 	}
-	title, err := RenderPaneTitle(project.FromIssue.ClaudePaneTitle, data)
+	title, err := RenderPaneTitle(workspace.FromIssue.ClaudePaneTitle, data)
 	if err != nil {
 		return err
 	}
-	target := session + ":" + project.FromIssue.RepoWindow
+	target := session + ":" + workspace.FromIssue.RepoWindow
 	pane, err := tmux("split-window", "-v", "-t", target, "-P", "-F", "#{pane_id}")
 	if err != nil {
 		return err

@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-func twoProjectCfg(t *testing.T, repoA, repoB string) *Config {
+func twoWorkspaceCfg(t *testing.T, repoA, repoB string) *Config {
 	t.Helper()
 	return &Config{
-		DefaultProject: "a",
-		Projects: map[string]Project{
+		DefaultWorkspace: "a",
+		Workspaces: map[string]Workspace{
 			"a": {
 				Repo:       repoA,
 				Worktrees:  repoA + ".worktrees",
@@ -28,7 +28,7 @@ func TestResolve_CwdMatchesRepo(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
-	cfg := twoProjectCfg(t, repoA, repoB)
+	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	name, _, err := Resolve(cfg, "", repoB)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestResolve_CwdInsideWorktrees(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
-	cfg := twoProjectCfg(t, repoA, repoB)
+	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	cwd := filepath.Join(repoB+".worktrees", "some-branch", "nested")
 	name, _, err := Resolve(cfg, "", cwd)
@@ -59,7 +59,7 @@ func TestResolve_CwdInsideRepoSubdir(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
-	cfg := twoProjectCfg(t, repoA, repoB)
+	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	cwd := filepath.Join(repoA, "internal", "sub")
 	_, _, err := Resolve(cfg, "", cwd)
@@ -75,7 +75,7 @@ func TestResolve_FlagOverridesCwd(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
-	cfg := twoProjectCfg(t, repoA, repoB)
+	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	name, _, err := Resolve(cfg, "a", repoB)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestResolve_DefaultFallbackWhenNoCwdMatch(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
-	cfg := twoProjectCfg(t, repoA, repoB)
+	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	other := filepath.Join(dir, "elsewhere")
 	name, _, err := Resolve(cfg, "", other)
@@ -98,6 +98,6 @@ func TestResolve_DefaultFallbackWhenNoCwdMatch(t *testing.T) {
 		t.Fatalf("Resolve: %v", err)
 	}
 	if name != "a" {
-		t.Errorf("fallback should pick default_project; got %q", name)
+		t.Errorf("fallback should pick default_workspace; got %q", name)
 	}
 }

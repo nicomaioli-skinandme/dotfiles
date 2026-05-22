@@ -8,16 +8,16 @@ import (
 )
 
 const fullAndbegin = `
-default_project = "andbegin"
+default_workspace = "andbegin"
 
-[projects.andbegin]
+[workspaces.andbegin]
 repo            = "~/Code/andbegin-monorepo"
 worktrees       = "~/Code/andbegin-monorepo.worktrees"
 main_branch     = "master"
 branch_repo     = "skinandme/andbegin-monorepo"
 max_branch_len  = 20
 
-[projects.andbegin.gh_project]
+[workspaces.andbegin.gh_project]
 owner             = "skinandmeprojects"
 number            = 45
 id                = "PVT_kwDOBLqSu84AVoEL"
@@ -26,23 +26,23 @@ in_progress_id    = "15c99605"
 issue_repos       = ["skinandmeprojects/andbegin", "skinandmeprojects/projects"]
 backlog_statuses  = ["Backlog", "Platform Backlog"]
 
-[projects.andbegin.from_issue]
+[workspaces.andbegin.from_issue]
 claude_prompt     = "/plan pull the context from {{ .IssueURL }}"
 claude_pane_title = "IMPL {{ .IssueTitle }}"
 repo_window       = "repo"
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "repo"
 cwd  = "."
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "local"
 cwd  = "backend"
-  [[projects.andbegin.tmux.windows.panes]]
+  [[workspaces.andbegin.tmux.windows.panes]]
   split = "h"
   cwd   = "store-ui"
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "uat"
 cwd  = "deployment/uat"
 `
@@ -64,48 +64,48 @@ func TestLoad_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.DefaultProject != "andbegin" {
-		t.Errorf("default_project: got %q", cfg.DefaultProject)
+	if cfg.DefaultWorkspace != "andbegin" {
+		t.Errorf("default_workspace: got %q", cfg.DefaultWorkspace)
 	}
-	p, ok := cfg.Projects["andbegin"]
+	w, ok := cfg.Workspaces["andbegin"]
 	if !ok {
-		t.Fatal("project andbegin missing")
+		t.Fatal("workspace andbegin missing")
 	}
 	home, _ := os.UserHomeDir()
 	wantRepo := filepath.Join(home, "Code/andbegin-monorepo")
-	if p.Repo != wantRepo {
-		t.Errorf("repo: got %q want %q", p.Repo, wantRepo)
+	if w.Repo != wantRepo {
+		t.Errorf("repo: got %q want %q", w.Repo, wantRepo)
 	}
 	wantWt := filepath.Join(home, "Code/andbegin-monorepo.worktrees")
-	if p.Worktrees != wantWt {
-		t.Errorf("worktrees: got %q want %q", p.Worktrees, wantWt)
+	if w.Worktrees != wantWt {
+		t.Errorf("worktrees: got %q want %q", w.Worktrees, wantWt)
 	}
-	if p.MaxBranchLen != 20 {
-		t.Errorf("max_branch_len: got %d", p.MaxBranchLen)
+	if w.MaxBranchLen != 20 {
+		t.Errorf("max_branch_len: got %d", w.MaxBranchLen)
 	}
-	if p.GhProject.Number != 45 {
-		t.Errorf("gh_project.number: got %d", p.GhProject.Number)
+	if w.GhProject.Number != 45 {
+		t.Errorf("gh_project.number: got %d", w.GhProject.Number)
 	}
-	if len(p.GhProject.IssueRepos) != 2 {
-		t.Errorf("issue_repos: got %v", p.GhProject.IssueRepos)
+	if len(w.GhProject.IssueRepos) != 2 {
+		t.Errorf("issue_repos: got %v", w.GhProject.IssueRepos)
 	}
-	if p.FromIssue.RepoWindow != "repo" {
-		t.Errorf("repo_window: got %q", p.FromIssue.RepoWindow)
+	if w.FromIssue.RepoWindow != "repo" {
+		t.Errorf("repo_window: got %q", w.FromIssue.RepoWindow)
 	}
-	if got, want := len(p.Tmux.Windows), 3; got != want {
+	if got, want := len(w.Tmux.Windows), 3; got != want {
 		t.Fatalf("windows: got %d want %d", got, want)
 	}
-	if p.Tmux.Windows[1].Name != "local" || len(p.Tmux.Windows[1].Panes) != 1 {
-		t.Errorf("local window malformed: %+v", p.Tmux.Windows[1])
+	if w.Tmux.Windows[1].Name != "local" || len(w.Tmux.Windows[1].Panes) != 1 {
+		t.Errorf("local window malformed: %+v", w.Tmux.Windows[1])
 	}
-	if p.Tmux.Windows[1].Panes[0].Split != "h" {
-		t.Errorf("local pane split: got %q", p.Tmux.Windows[1].Panes[0].Split)
+	if w.Tmux.Windows[1].Panes[0].Split != "h" {
+		t.Errorf("local pane split: got %q", w.Tmux.Windows[1].Panes[0].Split)
 	}
 }
 
 func TestLoad_MissingRequiredField(t *testing.T) {
 	body := `
-[projects.andbegin]
+[workspaces.andbegin]
 worktrees   = "~/wt"
 main_branch = "master"
 `
@@ -115,13 +115,13 @@ main_branch = "master"
 		t.Fatal("expected error for missing repo")
 	}
 	if !strings.Contains(err.Error(), "andbegin") || !strings.Contains(err.Error(), "repo") {
-		t.Errorf("error should mention project and field: %v", err)
+		t.Errorf("error should mention workspace and field: %v", err)
 	}
 }
 
-func TestResolve_SingleProjectNoDefault(t *testing.T) {
+func TestResolve_SingleWorkspaceNoDefault(t *testing.T) {
 	body := `
-[projects.solo]
+[workspaces.solo]
 repo        = "/x"
 worktrees   = "/y"
 main_branch = "main"
@@ -131,20 +131,20 @@ main_branch = "main"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	name, p, err := Resolve(cfg, "", "")
+	name, w, err := Resolve(cfg, "", "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if name != "solo" || p == nil {
-		t.Errorf("Resolve: got %q %v", name, p)
+	if name != "solo" || w == nil {
+		t.Errorf("Resolve: got %q %v", name, w)
 	}
 }
 
 func TestLoad_UndefinedDefault(t *testing.T) {
 	body := `
-default_project = "ghost"
+default_workspace = "ghost"
 
-[projects.andbegin]
+[workspaces.andbegin]
 repo        = "/x"
 worktrees   = "/y"
 main_branch = "main"
@@ -152,7 +152,7 @@ main_branch = "main"
 	path := writeConfig(t, body)
 	_, err := Load(path)
 	if err == nil {
-		t.Fatal("expected error for undefined default_project")
+		t.Fatal("expected error for undefined default_workspace")
 	}
 	if !strings.Contains(err.Error(), "ghost") {
 		t.Errorf("error should mention undefined default: %v", err)
@@ -161,23 +161,23 @@ main_branch = "main"
 
 func TestLoad_RepoWindowMismatch(t *testing.T) {
 	body := `
-[projects.andbegin]
+[workspaces.andbegin]
 repo        = "/x"
 worktrees   = "/y"
 main_branch = "main"
 
-[projects.andbegin.from_issue]
+[workspaces.andbegin.from_issue]
 repo_window = "nope"
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "repo"
 cwd  = "."
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "local"
 cwd  = "backend"
 
-[[projects.andbegin.tmux.windows]]
+[[workspaces.andbegin.tmux.windows]]
 name = "uat"
 cwd  = "deployment/uat"
 `
@@ -193,14 +193,14 @@ cwd  = "deployment/uat"
 
 func TestResolve_ExplicitFlag(t *testing.T) {
 	body := `
-default_project = "andbegin"
+default_workspace = "andbegin"
 
-[projects.andbegin]
+[workspaces.andbegin]
 repo        = "/a"
 worktrees   = "/wa"
 main_branch = "main"
 
-[projects.other]
+[workspaces.other]
 repo        = "/b"
 worktrees   = "/wb"
 main_branch = "main"
@@ -218,18 +218,18 @@ main_branch = "main"
 		t.Errorf("explicit flag should win: got %q", name)
 	}
 	if _, _, err := Resolve(cfg, "ghost", ""); err == nil {
-		t.Error("expected error for undefined --project")
+		t.Error("expected error for undefined --workspace")
 	}
 }
 
-func TestResolve_MultiProjectNoDefaultNoCwd(t *testing.T) {
+func TestResolve_MultiWorkspaceNoDefaultNoCwd(t *testing.T) {
 	body := `
-[projects.a]
+[workspaces.a]
 repo        = "/a"
 worktrees   = "/wa"
 main_branch = "main"
 
-[projects.b]
+[workspaces.b]
 repo        = "/b"
 worktrees   = "/wb"
 main_branch = "main"

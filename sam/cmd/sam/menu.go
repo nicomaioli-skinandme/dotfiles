@@ -25,11 +25,11 @@ func newMenuCmd() *cobra.Command {
 		Short:  "Interactive picker (default when sam is run with no subcommand)",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			projectName, project, err := loadProject()
+			workspaceName, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
-			worktrees, err := gitx.Worktrees(project.Worktrees)
+			worktrees, err := gitx.Worktrees(workspace.Worktrees)
 			if err != nil {
 				return err
 			}
@@ -37,11 +37,11 @@ func newMenuCmd() *cobra.Command {
 			items := []ui.Item{
 				{Value: "system", Label: ui.Decorate("system", "system", tmuxx.HasSession("system"))},
 				{
-					Value: project.MainBranch,
+					Value: workspace.MainBranch,
 					Label: ui.Decorate(
-						project.MainBranch,
-						fmt.Sprintf("%s  (main repo)", project.MainBranch),
-						tmuxx.HasSession(project.MainBranch),
+						workspace.MainBranch,
+						fmt.Sprintf("%s  (main repo)", workspace.MainBranch),
+						tmuxx.HasSession(workspace.MainBranch),
 					),
 				},
 			}
@@ -67,11 +67,11 @@ func newMenuCmd() *cobra.Command {
 
 			switch sel.Value {
 			case menuValueFromIssue:
-				return runFromIssue(projectName, project, 0, "", true)
+				return runFromIssue(workspaceName, workspace, 0, "", true)
 			case menuValueNew:
-				return runNewWorktree(projectName, project, "")
+				return runNewWorktree(workspaceName, workspace, "")
 			case menuValueDelete:
-				return runDelete(cmd.OutOrStdout(), project, "")
+				return runDelete(cmd.OutOrStdout(), workspace, "")
 			}
 
 			name := sel.Value
@@ -88,12 +88,12 @@ func newMenuCmd() *cobra.Command {
 				return err
 			}
 			var baseDir string
-			if name == project.MainBranch {
-				baseDir = project.Repo
+			if name == workspace.MainBranch {
+				baseDir = workspace.Repo
 			} else {
-				baseDir = filepath.Join(project.Worktrees, name)
+				baseDir = filepath.Join(workspace.Worktrees, name)
 			}
-			if err := tmuxx.BuildSession(name, project, baseDir); err != nil {
+			if err := tmuxx.BuildSession(name, workspace, baseDir); err != nil {
 				return err
 			}
 			return tmuxx.SwitchOrAttach(name)
@@ -102,8 +102,8 @@ func newMenuCmd() *cobra.Command {
 }
 
 // shouldDefaultToMenu reports whether `sam` was invoked with no
-// subcommand and no top-level help request. --project (which carries a
-// value, attached or detached) does not count as a subcommand.
+// subcommand and no top-level help request. --workspace (which carries
+// a value, attached or detached) does not count as a subcommand.
 func shouldDefaultToMenu(args []string) bool {
 	skipNext := false
 	for _, a := range args {
@@ -118,7 +118,7 @@ func shouldDefaultToMenu(args []string) bool {
 			return false
 		}
 		if len(a) > 0 && a[0] == '-' {
-			if a == "--project" {
+			if a == "--workspace" {
 				skipNext = true
 			}
 			continue

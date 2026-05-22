@@ -44,8 +44,8 @@ func TestCreateWorktree_NoHook(t *testing.T) {
 	wts := filepath.Join(root, "wts")
 	initRepo(t, repo)
 
-	proj := &config.Project{Repo: repo, Worktrees: wts, MainBranch: "main"}
-	path, err := CreateWorktree(proj, "feature", 0, "demo")
+	ws := &config.Workspace{Repo: repo, Worktrees: wts, MainBranch: "main"}
+	path, err := CreateWorktree(ws, "feature", 0, "demo")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
@@ -69,15 +69,15 @@ func TestCreateWorktree_HookRunsWithEnv(t *testing.T) {
 	// Use printf rather than printenv so unset vars surface as empty
 	// lines instead of being skipped (macOS `printenv` exits 1 and
 	// drops unset names silently).
-	hook := `printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$SAM_BRANCH" "$SAM_WORKTREE" "$SAM_REPO" "$SAM_PROJECT" "$SAM_ISSUE_NUMBER" "$(pwd)" > ` + hookOut
+	hook := `printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$SAM_BRANCH" "$SAM_WORKTREE" "$SAM_REPO" "$SAM_WORKSPACE" "$SAM_ISSUE_NUMBER" "$(pwd)" > ` + hookOut
 
-	proj := &config.Project{
+	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
 		MainBranch:    "main",
 		WorktreeSetup: hook,
 	}
-	path, err := CreateWorktree(proj, "feature", 42, "demo")
+	path, err := CreateWorktree(ws, "feature", 42, "demo")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
@@ -115,13 +115,13 @@ func TestCreateWorktree_HookFailureBubblesUp(t *testing.T) {
 	wts := filepath.Join(root, "wts")
 	initRepo(t, repo)
 
-	proj := &config.Project{
+	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
 		MainBranch:    "main",
 		WorktreeSetup: "exit 7",
 	}
-	_, err := CreateWorktree(proj, "feature", 0, "demo")
+	_, err := CreateWorktree(ws, "feature", 0, "demo")
 	if err == nil {
 		t.Fatal("expected error from failing hook")
 	}
@@ -141,13 +141,13 @@ func TestCreateWorktree_IssueZeroLeavesEnvEmpty(t *testing.T) {
 	initRepo(t, repo)
 
 	hookOut := filepath.Join(root, "issue.out")
-	proj := &config.Project{
+	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
 		MainBranch:    "main",
 		WorktreeSetup: `printf "%s" "$SAM_ISSUE_NUMBER" > ` + hookOut,
 	}
-	if _, err := CreateWorktree(proj, "feature", 0, "demo"); err != nil {
+	if _, err := CreateWorktree(ws, "feature", 0, "demo"); err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
 	body, err := os.ReadFile(hookOut)
