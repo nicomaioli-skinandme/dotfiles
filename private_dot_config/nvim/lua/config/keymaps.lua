@@ -11,3 +11,8 @@ map("v", ">", ">gv")
 
 map("v", "J", ":m '>+1<CR>gv=gv", { desc = "Move selection down" })
 map("v", "K", ":m '<-2<CR>gv=gv", { desc = "Move selection up" })
+
+map("n", "<leader>jf", "<cmd>%!jq .<CR>", { desc = "JSON: format buffer" })
+map("n", "<leader>jm", "<cmd>%!jq -c .<CR>", { desc = "JSON: minify buffer" })
+map("x", "<leader>jf", ":!jq .<CR>", { desc = "JSON: format selection" })
+map("x", "<leader>jm", ":!jq -c .<CR>", { desc = "JSON: minify selection" })
