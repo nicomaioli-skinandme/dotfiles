@@ -98,6 +98,8 @@ Draft:  <yes/no>
 
 Ask them to **accept** or **edit**. If they edit, apply the edits and re-show only if something material changed. **Do not call `gh pr create` until the user has explicitly accepted.**
 
+Before you submit, ensure to strip out all additional `\n` artefacts that you're introducing when presenting the PR body as a preview. These show as new-lines in GitHub.
+
 ### 8. Create the PR
 
 Push the branch if it has no upstream:

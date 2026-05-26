@@ -93,3 +93,12 @@ mkdir -p ~/Code/dotfiles/dot_claude/skills/<name>
 $EDITOR ~/Code/dotfiles/dot_claude/skills/<name>/SKILL.md
 chezmoi apply        # materializes ~/.claude/skills/<name>/SKILL.md
 ```
+
+## Sam
+
+`sam/` is a Go CLI for tmux + git-worktree workflows. It has its own
+agent guidance and a project glossary that defines the canonical
+meaning of recurring terms (workspace, worktree, GitHub Project, main
+branch, backlog, etc.). Load it when working on anything under `sam/`:
+
+@sam/AGENTS.md

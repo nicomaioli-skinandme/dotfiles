@@ -1,8 +1,11 @@
 # sam glossary
 
-Terms used in sam's code, config, and CLI. The point of this file is to
-keep two easily-confused concepts — **workspace** and **GitHub Project**
-— from collapsing back into the same word.
+A shared vocabulary for sam — between contributors and AI agents. When
+these terms appear in conversation, code, config, or user-facing
+strings, they mean exactly what's defined here; no further
+disambiguation is needed. Two pairs deserve special vigilance because
+they're easy to collapse: **workspace** vs. **GitHub Project**, and
+**workspace** vs. **worktree**.
 
 ## Workspace
 
@@ -34,6 +37,33 @@ per branch, and drives a tmux session per worktree.
 Distinct from **workspace** despite the spelling overlap: "worktree" is
 git's term for a checkout; "workspace" is sam's term for the container.
 
+## Main branch
+
+The branch sam treats as the workspace's trunk — the one it fetches and
+fast-forwards before creating worktrees, and the one shown as the "main
+repo" entry in `sam list` / `sam menu`.
+
+- **Config:** `workspace.main_branch`.
+- **Go type:** `config.Workspace.MainBranch`.
+- The "main repo" menu entry is **synthetic**: it's a tmux session
+  attached to `workspace.repo` itself (the repo root, checked out to
+  `main_branch`), not a real git worktree under `workspace.worktrees/`.
+
+Distinct from git's notion of a default branch — sam doesn't infer it,
+it reads it from config and treats it as a first-class navigation
+target.
+
+## System session
+
+The always-on tmux session named literally `system`, ensured by
+`tmuxx.EnsureSystemSession`. Two windows: `home` (cwd `$HOME`) and
+`dotfiles` (cwd `~/Code/dotfiles`).
+
+- Appears as a synthetic entry in `sam list` and `sam menu` alongside
+  the main-repo entry — not tied to any workspace.
+- Used as the fallback attach target when a worktree is deleted (see
+  `cmd/sam/delete_worktree.go`).
+
 ## Branch repo
 
 The GitHub `owner/name` slug used by `gh issue develop` when creating
@@ -52,6 +82,40 @@ shortened to just "project" in this codebase.
 - **Go type:** `config.GhProject`.
 - **Used by:** `sam from-issue`, to read the configured project's backlog and move the picked item to "In Progress".
 - **Wraps:** `gh project ...` subcommands; see `internal/ghx`.
+
+## Backlog / In Progress
+
+GitHub Project status concepts used by `sam from-issue`. Two sides of
+the same transition: read the backlog, write In Progress.
+
+- **Backlog** in sam = whichever GitHub Project statuses match
+  `workspace.gh_project.backlog_statuses` (a list, e.g.
+  `["📋 Backlog", "Platform Backlog"]`). Anything with a matching
+  status is shown in the `from-issue` picker.
+- **In Progress** = the status sam writes back after a pick, identified
+  by `workspace.gh_project.in_progress_id` — a GitHub Project field
+  *option ID*, not a human-readable label.
+- The exact label strings are project-specific and configurable; the
+  *concepts* (backlog set, in-progress target) are stable.
+- **Go types:** `config.GhProject.BacklogStatuses`,
+  `config.GhProject.InProgressID`.
+
+## tmux layout
+
+The structured per-workspace description of the tmux session sam builds
+for each worktree.
+
+- **Config:** `[workspaces.<name>.tmux]` with one or more
+  `[[workspaces.<name>.tmux.windows]]` entries (each with `name`,
+  `cwd`) and nested `[[...windows.panes]]` (each with `split` = `h` or
+  `v`, and `cwd`).
+- **Go types:** `config.TmuxLayout` → `config.Window` → `config.Pane`.
+- **Built by:** `tmuxx.BuildSession` — first window via `new-session`,
+  rest via `new-window`, each pane via `split-window`.
+- `cwd` values are resolved relative to the worktree's base directory
+  (absolute paths pass through).
+- `workspace.from_issue.repo_window` references a window `name` from
+  this layout; config load fails if the reference doesn't resolve.
 
 ## `from-issue` flow
 
