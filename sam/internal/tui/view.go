@@ -171,9 +171,17 @@ func (m *model) renderStatusBar() string {
 	count := fmt.Sprintf("%d items", len(m.filtered))
 	right := hintStyle.Render(count + "   ? help ")
 
+	// The status bar must stay exactly one row: renderBody reserves only
+	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)
+	// would make the frame taller than the screen and corrupt the alt-screen
+	// render. Flatten to one line and truncate to the space available between
+	// the breadcrumb and the counter.
 	mid := ""
 	if m.status != "" {
-		mid = "  " + statusInfo.Render(m.status)
+		avail := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 3 // 2-space pad + 1-space min gap
+		if avail > 0 {
+			mid = "  " + statusInfo.Render(truncate(oneLine(m.status), avail))
+		}
 	}
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(mid)
@@ -181,6 +189,12 @@ func (m *model) renderStatusBar() string {
 		gap = 1
 	}
 	return left + mid + strings.Repeat(" ", gap) + right
+}
+
+// oneLine collapses any run of whitespace (including newlines) to a single
+// space so a status never spills past the one-row status bar.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func (m *model) renderModal() string {

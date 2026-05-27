@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
 )
@@ -173,6 +175,39 @@ func TestBranchEditModalRenders(t *testing.T) {
 	out := m.renderModal()
 	if !strings.Contains(out, "1-really-long-branch") {
 		t.Errorf("input modal should show the editable branch; got:\n%s", out)
+	}
+}
+
+func TestOneLine(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"single", "single"},
+		{"HTTP 401: Bad credentials\nTry authenticating with: gh auth login",
+			"HTTP 401: Bad credentials Try authenticating with: gh auth login"},
+		{"a\tb\n\nc   d", "a b c d"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := oneLine(c.in); got != c.want {
+			t.Errorf("oneLine(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// A multiline status (e.g. a multiline gh 401) must not spill the status bar
+// past one row or wider than the screen — that overflow is what froze the TUI.
+func TestStatusBarStaysOneLine(t *testing.T) {
+	m := testModel(sampleItems())
+	m.width, m.height = 80, 24
+	m.status = "HTTP 401: Bad credentials\nTry authenticating with: gh auth login"
+
+	bar := m.renderStatusBar()
+	if strings.Contains(bar, "\n") {
+		t.Errorf("status bar must be a single line; got:\n%q", bar)
+	}
+	if w := lipgloss.Width(bar); w > m.width {
+		t.Errorf("status bar width %d exceeds screen width %d", w, m.width)
 	}
 }
 

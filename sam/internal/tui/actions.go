@@ -136,7 +136,7 @@ func (m *model) activateIssue(it Item) (tea.Model, tea.Cmd) {
 func (m *model) handleFromIssuePrepared(msg fromIssuePreparedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.status = "error: " + msg.err.Error()
+		m.status = "gh errored"
 		return m, nil
 	}
 	m.pending = &fromIssueState{issue: msg.issue, me: msg.me, branch: msg.branch, existing: msg.existing}
@@ -200,7 +200,7 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	m.pending = nil
 	if msg.err != nil {
-		m.status = "error: " + msg.err.Error()
+		m.status = "gh errored"
 		return m, nil
 	}
 	m.result = Result{Attach: msg.session}
@@ -292,7 +292,7 @@ func deleteWorktreeCmd(ws *config.Workspace, target string) tea.Cmd {
 // outcome in the status line.
 func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.status = "error: " + msg.err.Error()
+		m.status = "action failed"
 		return m, nil
 	}
 	m.status = msg.info

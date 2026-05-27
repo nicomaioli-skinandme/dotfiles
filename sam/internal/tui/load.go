@@ -52,8 +52,14 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	m.status = msg.status
 	if msg.err != nil {
 		// Surface load failures in the status line and keep the TUI usable
-		// (switch to another resource, quit) rather than aborting.
-		m.status = "error: " + msg.err.Error()
+		// (switch to another resource, quit) rather than aborting. The error
+		// is kept generic on purpose — raw gh/git output is multiline and
+		// would overflow the status bar; richer error surfacing comes later.
+		if m.resource == ResIssues {
+			m.status = "gh errored"
+		} else {
+			m.status = "couldn't load " + m.resource.Name()
+		}
 		m.items = nil
 	} else {
 		m.items = msg.items
