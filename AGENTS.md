@@ -54,6 +54,18 @@ chezmoi apply                                                              # syn
 
 Both must pass before committing nvim changes.
 
+**Whenever you add or change a `keys = {}` mapping**, also run the keymap
+conflict gate. lazy.nvim silently lets the last-loaded spec win when two
+plugins declare the same `lhs`+mode, so a clobbered keymap leaves no error —
+this catches it by enumerating every declared key across all specs:
+
+```sh
+nvim --headless -c 'luafile ~/.config/nvim/scripts/keymap-check.lua' -c 'qa!'   # exits non-zero on conflict
+```
+
+It reports the colliding `lhs` and the plugins fighting over it. Resolve by
+rebinding one side to a free namespace before committing.
+
 ## Claude config
 
 Lives in `dot_claude/` (chezmoi source for `~/.claude/`). Workflow is
