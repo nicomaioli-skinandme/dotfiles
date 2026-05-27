@@ -52,7 +52,20 @@ Fetch it:
 gh issue view <url-or-number> --json number,title,body,labels
 ```
 
-### 2. Investigate the codebase
+### 2. Base on `origin/master`
+
+The refinement must always reflect `origin/master`, not whatever is checked out.
+
+- Check the current branch (`git rev-parse --abbrev-ref HEAD`).
+- If it is **not** `master`, ask the operator for permission to fetch
+  (`git fetch origin master`) and base the analysis on `origin/master`. Do not
+  modify the working tree (no checkout/reset) — read against `origin/master`
+  (e.g. `git show origin/master:<path>`, `git ls-tree origin/master`) so the
+  operator's branch and uncommitted work are left untouched.
+- If permission is declined, stop and tell the operator the refinement can't
+  proceed against a stale base.
+
+### 3. Investigate the codebase
 
 Dispatch read-only **Explore** agents (in parallel) to map the areas the issue
 touches — the relevant modules, data flow, extension points, and current
@@ -69,7 +82,7 @@ operator. When it is an experiment:
   (**nested experiment** — confounds results; flag it).
 - Confirm the issue carries an **experiment name**. If missing, call it out.
 
-### 3. Clarify (interactive loop)
+### 4. Clarify (interactive loop)
 
 When the issue, or how it fits the codebase, is genuinely unclear, ask the
 operator via `AskUserQuestion`. Take the answers; if they open new uncertainty,
@@ -83,7 +96,7 @@ one required?") — this is operator judgment, not automatically a blocker.
 Anything still unresolved after the loop becomes the report's **Open questions**
 (for the issue author/PM).
 
-### 4. Report
+### 5. Report
 
 Brief verdict + sections. **Be terse** — bullets, not paragraphs. Omit any
 section with nothing to say rather than padding it.
