@@ -187,7 +187,7 @@ func runFromIssue(workspaceName string, workspace *config.Workspace, issueFlag i
 			IssueRepo:   issueRepo,
 			IssueURL:    fmt.Sprintf("https://github.com/%s/issues/%d", issueRepo, issueNum),
 		}
-		if err := tmuxx.AddClaudePane(branch, workspace, data); err != nil {
+		if err := tmuxx.AddClaudePane(branch, workspace, data, path); err != nil {
 			return err
 		}
 	}
