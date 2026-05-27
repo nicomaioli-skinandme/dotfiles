@@ -69,30 +69,37 @@ func main() {
 // no arguments so the user lands in a clean menu. This call does not
 // return in that case.
 func loadWorkspace() (string, *config.Workspace, error) {
+	name, ws, _, err := loadWorkspaceAndConfig()
+	return name, ws, err
+}
+
+// loadWorkspaceAndConfig is loadWorkspace plus the full parsed config, for
+// callers (the menu's `:workspaces`) that need every configured workspace.
+func loadWorkspaceAndConfig() (string, *config.Workspace, *config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := runFirstRunWizard(path); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		// runFirstRunWizard either re-execs (no return) or returns
 		// nil after the user cancelled, in which case we exit.
 		os.Exit(0)
 	} else if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	cfg, err := config.Load(path)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	cwd, _ := os.Getwd()
 	name, ws, err := config.Resolve(cfg, workspaceFlag, cwd)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	return name, ws, nil
+	return name, ws, cfg, nil
 }
 
 func runFirstRunWizard(path string) error {

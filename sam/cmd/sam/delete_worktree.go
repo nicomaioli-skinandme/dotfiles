@@ -11,6 +11,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 )
 
@@ -20,53 +21,37 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete a worktree (and its tmux session)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				// Worktree selection + delete confirmation happen in the TUI.
+				return runMenu(tui.ResWorktrees)
+			}
 			_, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
-			nameArg := ""
-			if len(args) == 1 {
-				nameArg = args[0]
-			}
-			return runDelete(cmd.OutOrStdout(), workspace, nameArg)
+			return runDelete(cmd.OutOrStdout(), workspace, args[0])
 		},
 	}
 }
 
-func runDelete(out io.Writer, workspace *config.Workspace, nameArg string) error {
+// runDelete removes a named worktree and kills its tmux session. The name
+// is always provided (the CLI arg); interactive selection lives in the
+// TUI. When the caller is currently inside the target session it confirms
+// first and hops to the system session.
+func runDelete(out io.Writer, workspace *config.Workspace, target string) error {
 	candidates, err := gitx.Worktrees(workspace.Worktrees)
 	if err != nil {
 		return err
 	}
-	if len(candidates) == 0 {
-		return fmt.Errorf("no worktrees to delete")
+	found := false
+	for _, c := range candidates {
+		if c == target {
+			found = true
+			break
+		}
 	}
-
-	target := nameArg
-	if target != "" {
-		found := false
-		for _, c := range candidates {
-			if c == target {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("worktree %q not found under %s", target, workspace.Worktrees)
-		}
-	} else {
-		items := make([]ui.Item, 0, len(candidates))
-		for _, c := range candidates {
-			items = append(items, ui.Item{Value: c, Label: c})
-		}
-		sel, err := ui.Picker("Select worktree to delete", items)
-		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
-				return nil
-			}
-			return err
-		}
-		target = sel.Value
+	if !found {
+		return fmt.Errorf("worktree %q not found under %s", target, workspace.Worktrees)
 	}
 
 	current, _ := tmuxx.CurrentSession()

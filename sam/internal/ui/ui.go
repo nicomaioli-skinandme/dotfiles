@@ -1,6 +1,7 @@
-// Package ui wraps charmbracelet/huh primitives used by sam's command
-// flows: a filterable picker, a yes/no confirm, an editable input, and
-// a small label decorator.
+// Package ui wraps huh primitives used by sam's setup wizard (and the
+// `sam delete` confirmation): a filterable picker, a multi-select, a
+// yes/no confirm, and an editable input. The full-screen navigation TUI
+// (internal/tui) does not use this package.
 package ui
 
 import (
@@ -8,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 // ErrCancelled is returned when the user dismisses the prompt (Esc,
@@ -117,16 +118,4 @@ func MultiPicker(title string, items []Item, preselected []string) ([]string, er
 		return nil, err
 	}
 	return selected, nil
-}
-
-// Decorate prepends a bullet to `label` when the named session is
-// active.
-func Decorate(name, label string, active bool) string {
-	if label == "" {
-		label = name
-	}
-	if active {
-		return "● " + label
-	}
-	return label
 }

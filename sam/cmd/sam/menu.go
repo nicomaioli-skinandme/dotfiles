@@ -1,22 +1,13 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
-)
-
-const (
-	menuValueFromIssue = "__from_issue__"
-	menuValueNew       = "__new__"
-	menuValueDelete    = "__delete__"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
 )
 
 func newMenuCmd() *cobra.Command {
@@ -25,80 +16,59 @@ func newMenuCmd() *cobra.Command {
 		Short:  "Interactive picker (default when sam is run with no subcommand)",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			workspaceName, workspace, err := loadWorkspace()
-			if err != nil {
-				return err
-			}
-			worktrees, err := gitx.Worktrees(workspace.Worktrees)
-			if err != nil {
-				return err
-			}
-
-			items := []ui.Item{
-				{Value: "system", Label: ui.Decorate("system", "system", tmuxx.HasSession("system"))},
-				{
-					Value: workspace.MainBranch,
-					Label: ui.Decorate(
-						workspace.MainBranch,
-						fmt.Sprintf("%s  (main repo)", workspace.MainBranch),
-						tmuxx.HasSession(workspace.MainBranch),
-					),
-				},
-			}
-			for _, w := range worktrees {
-				items = append(items, ui.Item{
-					Value: w,
-					Label: ui.Decorate(w, w, tmuxx.HasSession(w)),
-				})
-			}
-			items = append(items,
-				ui.Item{Value: menuValueFromIssue, Label: "+ from issue"},
-				ui.Item{Value: menuValueNew, Label: "+ new worktree"},
-				ui.Item{Value: menuValueDelete, Label: "- delete worktree"},
-			)
-
-			sel, err := ui.Picker("sam", items)
-			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
-					return nil
-				}
-				return err
-			}
-
-			switch sel.Value {
-			case menuValueFromIssue:
-				return runFromIssue(workspaceName, workspace, 0, "", true)
-			case menuValueNew:
-				return runNewWorktree(workspaceName, workspace, "")
-			case menuValueDelete:
-				return runDelete(cmd.OutOrStdout(), workspace, "")
-			}
-
-			name := sel.Value
-			if tmuxx.HasSession(name) {
-				return tmuxx.SwitchOrAttach(name)
-			}
-			if name == "system" {
-				if err := tmuxx.EnsureSystemSession(); err != nil {
-					return err
-				}
-				return tmuxx.SwitchOrAttach("system")
-			}
-			if err := tmuxx.EnsureSystemSession(); err != nil {
-				return err
-			}
-			var baseDir string
-			if name == workspace.MainBranch {
-				baseDir = workspace.Repo
-			} else {
-				baseDir = filepath.Join(workspace.Worktrees, name)
-			}
-			if err := tmuxx.BuildSession(name, workspace, baseDir); err != nil {
-				return err
-			}
-			return tmuxx.SwitchOrAttach(name)
+			return runMenu(tui.ResWorktrees)
 		},
 	}
+}
+
+// runMenu launches the full-screen TUI on the given starting resource,
+// then performs the action it returned. The TUI never grabs tmux itself
+// (attaching replaces the process image); it hands back a tui.Result and
+// we act on it here, after the program has released the terminal.
+func runMenu(start tui.Resource) error {
+	name, workspace, cfg, err := loadWorkspaceAndConfig()
+	if err != nil {
+		return err
+	}
+
+	res, err := tui.Run(name, workspace, cfg.Workspaces, start)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case res.RunWizard:
+		// The wizard owns the terminal; run it, then drop back into the menu.
+		if err := runWorkspaceAdd(os.Stdout); err != nil {
+			return err
+		}
+		return runMenu(tui.ResWorkspaces)
+
+	case res.NewWorktreeBranch != "":
+		return runNewWorktree(name, workspace, res.NewWorktreeBranch)
+
+	case res.Attach != "":
+		if res.Build != nil {
+			if err := buildForAttach(res.Attach, workspace, res.Build); err != nil {
+				return err
+			}
+		}
+		return tmuxx.SwitchOrAttach(res.Attach)
+	}
+
+	return nil // user quit
+}
+
+// buildForAttach creates the tmux session named by attach before the
+// caller switches to it.
+func buildForAttach(attach string, workspace *config.Workspace, spec *tui.BuildSpec) error {
+	if spec.EnsureSystem {
+		return tmuxx.EnsureSystemSession()
+	}
+	if err := tmuxx.EnsureSystemSession(); err != nil {
+		return err
+	}
+	return tmuxx.BuildSession(attach, workspace, spec.BaseDir)
 }
 
 // shouldDefaultToMenu reports whether `sam` was invoked with no
