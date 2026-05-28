@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"text/tabwriter"
 
@@ -23,13 +22,9 @@ type worktreeRecord struct {
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List worktrees (plus synthetic system and main entries)",
+		Short: "List worktrees (plus the synthetic main-repo entry)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			_, workspace, err := loadWorkspace()
-			if err != nil {
-				return err
-			}
-			home, err := os.UserHomeDir()
 			if err != nil {
 				return err
 			}
@@ -38,9 +33,8 @@ func newListCmd() *cobra.Command {
 				return err
 			}
 
-			records := make([]worktreeRecord, 0, 2+len(worktrees))
+			records := make([]worktreeRecord, 0, 1+len(worktrees))
 			records = append(records,
-				worktreeRecord{Name: "system", Path: home, SessionActive: tmuxx.HasSession("system")},
 				worktreeRecord{Name: workspace.MainBranch, Path: workspace.Repo, SessionActive: tmuxx.HasSession(workspace.MainBranch)},
 			)
 			for _, w := range worktrees {

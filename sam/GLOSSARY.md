@@ -53,17 +53,6 @@ Distinct from git's notion of a default branch — sam doesn't infer it,
 it reads it from config and treats it as a first-class navigation
 target.
 
-## System session
-
-The always-on tmux session named literally `system`, ensured by
-`tmuxx.EnsureSystemSession`. Two windows: `home` (cwd `$HOME`) and
-`dotfiles` (cwd `~/Code/dotfiles`).
-
-- Appears as a synthetic entry in `sam list` and `sam menu` alongside
-  the main-repo entry — not tied to any workspace.
-- Used as the fallback attach target when a worktree is deleted (see
-  `cmd/sam/delete_worktree.go`).
-
 ## Branch repo
 
 The GitHub `owner/name` slug used by `gh issue develop` when creating

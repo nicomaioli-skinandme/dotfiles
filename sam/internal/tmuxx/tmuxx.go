@@ -42,29 +42,6 @@ func HasSession(name string) bool {
 	return cmd.Run() == nil
 }
 
-// EnsureSystemSession creates the always-on "system" session if missing.
-// Two windows: home (cwd $HOME) and dotfiles (cwd ~/Code/dotfiles).
-func EnsureSystemSession() error {
-	if HasSession("system") {
-		return nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	if _, err := tmux("new-session", "-d", "-s", "system", "-n", "home", "-c", home); err != nil {
-		return err
-	}
-	dotfiles := filepath.Join(home, "Code", "dotfiles")
-	if _, err := tmux("new-window", "-t", "system", "-n", "dotfiles", "-c", dotfiles); err != nil {
-		return err
-	}
-	if _, err := tmux("select-window", "-t", "system:home"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func resolveCwd(baseDir, rel string) string {
 	if rel == "" || rel == "." {
 		return baseDir

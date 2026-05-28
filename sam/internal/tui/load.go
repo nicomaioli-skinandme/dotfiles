@@ -77,7 +77,6 @@ func (m *model) loadWorktrees() tea.Cmd {
 			return itemsLoadedMsg{resource: ResWorktrees, err: err}
 		}
 		items := []Item{
-			{ID: "system", Title: "system", Active: tmuxx.HasSession("system")},
 			{
 				ID:     ws.MainBranch,
 				Title:  ws.MainBranch,

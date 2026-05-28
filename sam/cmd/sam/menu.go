@@ -62,12 +62,6 @@ func runMenu(start tui.Resource) error {
 // buildForAttach creates the tmux session named by attach before the
 // caller switches to it.
 func buildForAttach(attach string, workspace *config.Workspace, spec *tui.BuildSpec) error {
-	if spec.EnsureSystem {
-		return tmuxx.EnsureSystemSession()
-	}
-	if err := tmuxx.EnsureSystemSession(); err != nil {
-		return err
-	}
 	return tmuxx.BuildSession(attach, workspace, spec.BaseDir)
 }
 

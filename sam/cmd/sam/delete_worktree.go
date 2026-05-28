@@ -37,7 +37,7 @@ func newDeleteCmd() *cobra.Command {
 // runDelete removes a named worktree and kills its tmux session. The name
 // is always provided (the CLI arg); interactive selection lives in the
 // TUI. When the caller is currently inside the target session it confirms
-// first and hops to the system session.
+// first and hops to the workspace's main repo.
 func runDelete(out io.Writer, workspace *config.Workspace, target string) error {
 	candidates, err := gitx.Worktrees(workspace.Worktrees)
 	if err != nil {
@@ -66,10 +66,12 @@ func runDelete(out io.Writer, workspace *config.Workspace, target string) error 
 		if !ok {
 			return nil
 		}
-		if err := tmuxx.EnsureSystemSession(); err != nil {
-			return err
+		if !tmuxx.HasSession(workspace.MainBranch) {
+			if err := tmuxx.BuildSession(workspace.MainBranch, workspace, workspace.Repo); err != nil {
+				return err
+			}
 		}
-		if err := tmuxx.SwitchOrAttach("system"); err != nil {
+		if err := tmuxx.SwitchOrAttach(workspace.MainBranch); err != nil {
 			return err
 		}
 	}

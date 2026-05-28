@@ -44,7 +44,7 @@ func testModel(items []Item) *model {
 
 func sampleItems() []Item {
 	return []Item{
-		{ID: "system", Title: "system", Active: true},
+		{ID: "release", Title: "release", Active: true},
 		{ID: "main", Title: "main", Detail: "main repo"},
 		{ID: "feat-login", Title: "feat-login"},
 		{ID: "fix-crash", Title: "fix-crash", Active: true},
@@ -241,17 +241,12 @@ func TestActivateWorktreeBuildsResult(t *testing.T) {
 	}
 }
 
-func TestDeleteGuardsSyntheticRows(t *testing.T) {
+func TestDeleteGuardsMainRepo(t *testing.T) {
 	m := newModel("ws", &config.Workspace{MainBranch: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees)
-	m.items = []Item{{ID: "system", Title: "system"}, {ID: "main", Title: "main"}}
+	m.items = []Item{{ID: "main", Title: "main"}}
 	m.applyFilter()
 
-	m.cursor = 0 // system
-	m.del()
-	if m.modal.kind != modalNone {
-		t.Error("delete on system should not open a modal")
-	}
-	m.cursor = 1 // main repo
+	m.cursor = 0
 	m.del()
 	if m.modal.kind != modalNone {
 		t.Error("delete on main repo should not open a modal")

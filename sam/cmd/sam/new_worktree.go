@@ -40,9 +40,6 @@ func runNewWorktree(workspaceName string, workspace *config.Workspace, branch st
 	if err != nil {
 		return err
 	}
-	if err := tmuxx.EnsureSystemSession(); err != nil {
-		return err
-	}
 	if err := tmuxx.BuildSession(branch, workspace, path); err != nil {
 		return err
 	}

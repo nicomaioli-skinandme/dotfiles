@@ -190,9 +190,6 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 		return "", err
 	}
 
-	if err := tmuxx.EnsureSystemSession(); err != nil {
-		return "", err
-	}
 	if !tmuxx.HasSession(branch) {
 		if err := tmuxx.BuildSession(branch, ws, path); err != nil {
 			return "", err

@@ -27,7 +27,7 @@ import (
 type Resource int
 
 const (
-	ResWorktrees  Resource = iota // system, main repo, and per-branch worktrees
+	ResWorktrees  Resource = iota // main repo and per-branch worktrees
 	ResWorkspaces                 // configured workspaces; activate switches the active one
 	ResIssues                     // GitHub Project backlog / open issues (async)
 	ResClankers                   // running claude processes and their tmux context
@@ -73,8 +73,7 @@ type Item struct {
 
 // BuildSpec tells the caller to create a tmux session before attaching.
 type BuildSpec struct {
-	BaseDir      string // working directory for the session's first window
-	EnsureSystem bool   // ensure the always-on `system` session instead of building
+	BaseDir string // working directory for the session's first window
 }
 
 // Result is the single value the TUI hands back on exit. At most one of

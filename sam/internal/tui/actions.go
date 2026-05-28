@@ -55,8 +55,6 @@ func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
 	switch {
 	case tmuxx.HasSession(name):
 		m.result = Result{Attach: name}
-	case name == "system":
-		m.result = Result{Attach: "system", Build: &BuildSpec{EnsureSystem: true}}
 	case name == m.workspace.MainBranch:
 		m.result = Result{Attach: name, Build: &BuildSpec{BaseDir: m.workspace.Repo}}
 	default:
@@ -248,11 +246,7 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	switch it.ID {
-	case "system":
-		m.status = "cannot delete the system session"
-		return m, nil
-	case m.workspace.MainBranch:
+	if it.ID == m.workspace.MainBranch {
 		m.status = "cannot delete the main repo"
 		return m, nil
 	}
