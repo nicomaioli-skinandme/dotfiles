@@ -8,7 +8,6 @@ import (
 func twoWorkspaceCfg(t *testing.T, repoA, repoB string) *Config {
 	t.Helper()
 	return &Config{
-		DefaultWorkspace: "a",
 		Workspaces: map[string]Workspace{
 			"a": {
 				Repo:       repoA,
@@ -86,18 +85,41 @@ func TestResolve_FlagOverridesCwd(t *testing.T) {
 	}
 }
 
-func TestResolve_DefaultFallbackWhenNoCwdMatch(t *testing.T) {
+func TestResolve_UnresolvedReturnsNil(t *testing.T) {
 	dir := t.TempDir()
 	repoA := filepath.Join(dir, "a")
 	repoB := filepath.Join(dir, "b")
 	cfg := twoWorkspaceCfg(t, repoA, repoB)
 
 	other := filepath.Join(dir, "elsewhere")
-	name, _, err := Resolve(cfg, "", other)
+	name, ws, err := Resolve(cfg, "", other)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if name != "a" {
-		t.Errorf("fallback should pick default_workspace; got %q", name)
+	if name != "" || ws != nil {
+		t.Errorf("expected unresolved (\"\", nil); got %q, %v", name, ws)
+	}
+}
+
+func TestResolve_SingleWorkspaceShortcut(t *testing.T) {
+	dir := t.TempDir()
+	repoA := filepath.Join(dir, "a")
+	cfg := &Config{
+		Workspaces: map[string]Workspace{
+			"only": {
+				Repo:       repoA,
+				Worktrees:  repoA + ".worktrees",
+				MainBranch: "main",
+			},
+		},
+	}
+
+	other := filepath.Join(dir, "elsewhere")
+	name, ws, err := Resolve(cfg, "", other)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if name != "only" || ws == nil {
+		t.Errorf("single-workspace shortcut should pick the only workspace; got %q, %v", name, ws)
 	}
 }

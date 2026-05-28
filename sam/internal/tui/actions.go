@@ -32,7 +32,11 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 	}
 	if m.branchPick {
 		// Picked a branch for a new worktree: defer creation to the caller.
-		m.result = Result{NewWorktreeBranch: it.ID}
+		m.result = Result{
+			NewWorktreeBranch: it.ID,
+			Workspace:         m.workspace,
+			WorkspaceName:     m.workspaceName,
+		}
 		return m, tea.Quit
 	}
 	switch m.resource {
@@ -54,12 +58,26 @@ func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
 	name := it.ID
 	switch {
 	case tmuxx.HasSession(name):
-		m.result = Result{Attach: name}
+		m.result = Result{
+			Attach:        name,
+			Workspace:     m.workspace,
+			WorkspaceName: m.workspaceName,
+		}
 	case name == m.workspace.MainBranch:
-		m.result = Result{Attach: name, Build: &BuildSpec{BaseDir: m.workspace.Repo}}
+		m.result = Result{
+			Attach:        name,
+			Build:         &BuildSpec{BaseDir: m.workspace.Repo},
+			Workspace:     m.workspace,
+			WorkspaceName: m.workspaceName,
+		}
 	default:
 		baseDir := filepath.Join(m.workspace.Worktrees, name)
-		m.result = Result{Attach: name, Build: &BuildSpec{BaseDir: baseDir}}
+		m.result = Result{
+			Attach:        name,
+			Build:         &BuildSpec{BaseDir: baseDir},
+			Workspace:     m.workspace,
+			WorkspaceName: m.workspaceName,
+		}
 	}
 	return m, tea.Quit
 }
@@ -201,7 +219,11 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 		m.status = "gh errored"
 		return m, nil
 	}
-	m.result = Result{Attach: msg.session}
+	m.result = Result{
+		Attach:        msg.session,
+		Workspace:     m.workspace,
+		WorkspaceName: m.workspaceName,
+	}
 	return m, tea.Quit
 }
 
@@ -211,7 +233,11 @@ func (m *model) activateClanker(it Item) (tea.Model, tea.Cmd) {
 		m.status = "no tmux session for this clanker"
 		return m, nil
 	}
-	m.result = Result{Attach: it.ID}
+	m.result = Result{
+		Attach:        it.ID,
+		Workspace:     m.workspace,
+		WorkspaceName: m.workspaceName,
+	}
 	return m, tea.Quit
 }
 

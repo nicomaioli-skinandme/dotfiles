@@ -271,7 +271,13 @@ func (m *model) popView() {
 }
 
 // switchResource changes the active resource and reloads its items.
+// Refuses to leave ResWorkspaces while no workspace is active — every
+// other resource needs one.
 func (m *model) switchResource(r Resource) tea.Cmd {
+	if m.workspace == nil && r != ResWorkspaces {
+		m.status = "pick a workspace first"
+		return nil
+	}
 	m.resource = r
 	m.branchPick = false
 	m.stack = nil

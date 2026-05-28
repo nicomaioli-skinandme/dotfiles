@@ -31,9 +31,26 @@ func runMenu(start tui.Resource) error {
 		return err
 	}
 
+	// When cwd doesn't resolve to a workspace and --workspace wasn't
+	// given, open on the workspace-select view so the user picks one
+	// explicitly. The TUI will switch m.workspace once they pick.
+	if workspace == nil {
+		start = tui.ResWorkspaces
+	}
+
 	res, err := tui.Run(name, workspace, cfg.Workspaces, start)
 	if err != nil {
 		return err
+	}
+
+	// Post-TUI actions must use the workspace the user ended on, not
+	// the one we loaded at startup. The TUI carries the active
+	// workspace back through Result for exactly this reason.
+	ws := workspace
+	wsName := name
+	if res.Workspace != nil {
+		ws = res.Workspace
+		wsName = res.WorkspaceName
 	}
 
 	switch {
@@ -45,11 +62,11 @@ func runMenu(start tui.Resource) error {
 		return runMenu(tui.ResWorkspaces)
 
 	case res.NewWorktreeBranch != "":
-		return runNewWorktree(name, workspace, res.NewWorktreeBranch)
+		return runNewWorktree(wsName, ws, res.NewWorktreeBranch)
 
 	case res.Attach != "":
 		if res.Build != nil {
-			if err := buildForAttach(res.Attach, workspace, res.Build); err != nil {
+			if err := buildForAttach(res.Attach, ws, res.Build); err != nil {
 				return err
 			}
 		}

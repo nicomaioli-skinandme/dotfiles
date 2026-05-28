@@ -166,7 +166,13 @@ func (m *model) renderStatusBar() string {
 	if m.branchPick {
 		scope = "new worktree · pick branch"
 	}
-	left := breadcrumb.Render(fmt.Sprintf(" %s › %s", m.workspaceName, scope))
+	var crumb string
+	if m.workspaceName == "" {
+		crumb = fmt.Sprintf(" %s", scope)
+	} else {
+		crumb = fmt.Sprintf(" %s › %s", m.workspaceName, scope)
+	}
+	left := breadcrumb.Render(crumb)
 
 	count := fmt.Sprintf("%d items", len(m.filtered))
 	right := hintStyle.Render(count + "   ? help ")

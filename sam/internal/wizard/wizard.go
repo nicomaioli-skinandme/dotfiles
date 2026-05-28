@@ -173,17 +173,6 @@ func Run(existing *config.Config) (*config.Config, error) {
 	ws.WorktreeSetup = worktreeSetup
 
 	cfg.Workspaces[name] = ws
-	if cfg.DefaultWorkspace == "" && len(cfg.Workspaces) > 1 {
-		// Existing config previously relied on the single-workspace
-		// shortcut; preserve the prior workspace as default to avoid
-		// surprising existing users when they add a second workspace.
-		for n := range cfg.Workspaces {
-			if n != name {
-				cfg.DefaultWorkspace = n
-				break
-			}
-		}
-	}
 	return cfg, nil
 }
 

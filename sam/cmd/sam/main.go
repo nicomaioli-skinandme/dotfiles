@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -32,7 +33,7 @@ func main() {
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.PersistentFlags().StringVar(&workspaceFlag, "workspace", "",
-		"workspace name (overrides default_workspace)")
+		"workspace name (overrides cwd-based resolution)")
 	root.PersistentFlags().BoolVarP(&humanFlag, "human", "H", false,
 		"human-readable output (table) where supported")
 	root.AddCommand(newConfigPrintCmd())
@@ -64,17 +65,41 @@ func main() {
 // Returns (name, *Workspace) so callers that need the workspace name (e.g.
 // the worktree-setup hook) don't have to look it up again.
 //
+// Non-menu callers require an active workspace; when cwd is ambiguous
+// and --workspace was not given, loadWorkspace returns an error pointing
+// the user at --workspace. The interactive menu uses
+// loadWorkspaceAndConfig directly so it can open the workspace-select
+// view in that case.
+//
 // First-run side effect: when ~/.config/sam/config.toml is missing,
 // runs the setup wizard, saves the result, and re-execs `sam` with
 // no arguments so the user lands in a clean menu. This call does not
 // return in that case.
 func loadWorkspace() (string, *config.Workspace, error) {
-	name, ws, _, err := loadWorkspaceAndConfig()
-	return name, ws, err
+	name, ws, cfg, err := loadWorkspaceAndConfig()
+	if err != nil {
+		return name, ws, err
+	}
+	if ws == nil {
+		return "", nil, fmt.Errorf("no workspace matches this directory: pass --workspace (have: %s)",
+			workspaceNames(cfg))
+	}
+	return name, ws, nil
 }
 
-// loadWorkspaceAndConfig is loadWorkspace plus the full parsed config, for
-// callers (the menu's `:workspaces`) that need every configured workspace.
+func workspaceNames(cfg *config.Config) string {
+	names := make([]string, 0, len(cfg.Workspaces))
+	for n := range cfg.Workspaces {
+		names = append(names, n)
+	}
+	return strings.Join(names, ", ")
+}
+
+// loadWorkspaceAndConfig is loadWorkspace's underlying resolver: it
+// returns the (possibly nil) resolved workspace alongside the full
+// config. A nil ws with a nil err means "no workspace selected; ask
+// the user." Non-menu callers should go through loadWorkspace
+// instead, which surfaces an error in that case.
 func loadWorkspaceAndConfig() (string, *config.Workspace, *config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {

@@ -8,8 +8,6 @@ import (
 )
 
 const fullAndbegin = `
-default_workspace = "andbegin"
-
 [workspaces.andbegin]
 repo            = "~/Code/andbegin-monorepo"
 worktrees       = "~/Code/andbegin-monorepo.worktrees"
@@ -63,9 +61,6 @@ func TestLoad_HappyPath(t *testing.T) {
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-	if cfg.DefaultWorkspace != "andbegin" {
-		t.Errorf("default_workspace: got %q", cfg.DefaultWorkspace)
 	}
 	w, ok := cfg.Workspaces["andbegin"]
 	if !ok {
@@ -140,25 +135,6 @@ main_branch = "main"
 	}
 }
 
-func TestLoad_UndefinedDefault(t *testing.T) {
-	body := `
-default_workspace = "ghost"
-
-[workspaces.andbegin]
-repo        = "/x"
-worktrees   = "/y"
-main_branch = "main"
-`
-	path := writeConfig(t, body)
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error for undefined default_workspace")
-	}
-	if !strings.Contains(err.Error(), "ghost") {
-		t.Errorf("error should mention undefined default: %v", err)
-	}
-}
-
 func TestLoad_RepoWindowMismatch(t *testing.T) {
 	body := `
 [workspaces.andbegin]
@@ -193,8 +169,6 @@ cwd  = "deployment/uat"
 
 func TestResolve_ExplicitFlag(t *testing.T) {
 	body := `
-default_workspace = "andbegin"
-
 [workspaces.andbegin]
 repo        = "/a"
 worktrees   = "/wa"
@@ -222,7 +196,7 @@ main_branch = "main"
 	}
 }
 
-func TestResolve_MultiWorkspaceNoDefaultNoCwd(t *testing.T) {
+func TestResolve_MultiWorkspaceNoCwdMatch(t *testing.T) {
 	body := `
 [workspaces.a]
 repo        = "/a"
@@ -239,7 +213,11 @@ main_branch = "main"
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if _, _, err := Resolve(cfg, "", ""); err == nil {
-		t.Fatal("expected resolve error when no flag, no default, no cwd match")
+	name, ws, err := Resolve(cfg, "", "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if name != "" || ws != nil {
+		t.Errorf("expected unresolved (\"\", nil); got %q %v", name, ws)
 	}
 }

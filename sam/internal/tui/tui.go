@@ -78,11 +78,19 @@ type BuildSpec struct {
 
 // Result is the single value the TUI hands back on exit. At most one of
 // its actions is set; an all-zero Result means "user quit, do nothing".
+//
+// Workspace + WorkspaceName carry the workspace the TUI was operating
+// on when the user picked the action — this is not necessarily the
+// workspace the menu launched with (the user may have switched via
+// `:workspaces`). Post-TUI callers MUST prefer these over their own
+// captured workspace pointer when present.
 type Result struct {
-	Attach            string     // session to switch/attach to after exit
-	Build             *BuildSpec // create this session (named by Attach) first
-	RunWizard         bool       // run `workspace add` wizard after exit
-	NewWorktreeBranch string     // run new-worktree for this branch after exit
+	Attach            string            // session to switch/attach to after exit
+	Build             *BuildSpec        // create this session (named by Attach) first
+	RunWizard         bool              // run `workspace add` wizard after exit
+	NewWorktreeBranch string            // run new-worktree for this branch after exit
+	Workspace         *config.Workspace // workspace active in the TUI at exit
+	WorkspaceName     string            // its key in cfg.Workspaces
 }
 
 // Run launches the full-screen TUI against the given workspace and

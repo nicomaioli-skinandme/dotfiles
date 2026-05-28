@@ -14,7 +14,7 @@ directory, the main branch, the tmux layout, the optional
 `worktree_setup` hook, and an optional link to a GitHub Project board.
 
 - **Config:** `[workspaces.<name>]` in `~/.config/sam/config.toml`.
-- **Default selection:** `default_workspace = "<name>"` at the top of the config.
+- **Selection:** sam resolves the active workspace from `--workspace` or from cwd (the repo root or anywhere under the worktrees dir). When neither resolves and there's more than one workspace configured, the menu opens on the workspace-select view; non-interactive commands error and ask for `--workspace`.
 - **CLI:** `--workspace <name>` to override, `sam workspace add` to create one via the wizard.
 - **Go type:** `config.Workspace`.
 - **Env (exposed to `worktree_setup`):** `SAM_WORKSPACE`.

@@ -227,7 +227,8 @@ func TestFromIssuePreparedPromptsReassign(t *testing.T) {
 }
 
 func TestActivateWorktreeBuildsResult(t *testing.T) {
-	m := newModel("ws", &config.Workspace{MainBranch: "main", Repo: "/repo", Worktrees: "/wt"}, nil, ResWorktrees)
+	ws := &config.Workspace{MainBranch: "main", Repo: "/repo", Worktrees: "/wt"}
+	m := newModel("ws", ws, nil, ResWorktrees)
 	m.items = []Item{{ID: "feat-x", Title: "feat-x"}}
 	m.applyFilter()
 
@@ -238,6 +239,43 @@ func TestActivateWorktreeBuildsResult(t *testing.T) {
 	// No live tmux session in tests, so a build spec must be present.
 	if m.result.Build == nil || m.result.Build.BaseDir != "/wt/feat-x" {
 		t.Fatalf("build spec: got %+v", m.result.Build)
+	}
+	if m.result.Workspace != ws || m.result.WorkspaceName != "ws" {
+		t.Errorf("result must carry the active workspace; got %v / %q",
+			m.result.Workspace, m.result.WorkspaceName)
+	}
+}
+
+func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
+	// Use unique branch names so tmux session lookups in the test
+	// environment can't match a real session and skew the build-spec
+	// branch in activateWorktree.
+	wsA := config.Workspace{MainBranch: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
+	wsB := config.Workspace{MainBranch: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
+	all := map[string]config.Workspace{"a": wsA, "b": wsB}
+	m := newModel("a", &wsA, all, ResWorktrees)
+
+	// Simulate the user invoking `:workspaces` and picking "b".
+	if cmd := m.switchWorkspace("b"); cmd == nil {
+		t.Fatal("switchWorkspace returned nil cmd")
+	}
+	if m.workspaceName != "b" || m.workspace.Repo != "/b" {
+		t.Fatalf("after switch: name=%q repo=%q", m.workspaceName, m.workspace.Repo)
+	}
+
+	// Now pick the main-repo entry for the *switched-to* workspace.
+	m.items = []Item{{ID: wsB.MainBranch, Title: wsB.MainBranch}}
+	m.applyFilter()
+	m.activate()
+
+	if m.result.WorkspaceName != "b" {
+		t.Errorf("result must carry the switched-to workspace name; got %q", m.result.WorkspaceName)
+	}
+	if m.result.Workspace == nil || m.result.Workspace.Repo != "/b" {
+		t.Errorf("result must carry the switched-to workspace pointer; got %v", m.result.Workspace)
+	}
+	if m.result.Build == nil || m.result.Build.BaseDir != "/b" {
+		t.Errorf("build spec must use the switched-to repo; got %+v", m.result.Build)
 	}
 }
 

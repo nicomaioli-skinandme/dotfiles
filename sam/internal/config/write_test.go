@@ -27,10 +27,6 @@ func TestSave_RoundTrip(t *testing.T) {
 		t.Errorf("workspaces mismatch after round-trip:\nbefore=%+v\nafter=%+v",
 			loaded.Workspaces, reloaded.Workspaces)
 	}
-	if loaded.DefaultWorkspace != reloaded.DefaultWorkspace {
-		t.Errorf("default_workspace mismatch: %q vs %q",
-			loaded.DefaultWorkspace, reloaded.DefaultWorkspace)
-	}
 }
 
 func TestSave_WorktreeSetupField(t *testing.T) {

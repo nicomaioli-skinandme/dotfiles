@@ -14,8 +14,7 @@ import (
 )
 
 type Config struct {
-	DefaultWorkspace string               `mapstructure:"default_workspace" toml:"default_workspace,omitempty"`
-	Workspaces       map[string]Workspace `mapstructure:"workspaces" toml:"workspaces"`
+	Workspaces map[string]Workspace `mapstructure:"workspaces" toml:"workspaces"`
 }
 
 type Workspace struct {
@@ -112,8 +111,13 @@ func Load(path string) (*Config, error) {
 //  1. explicit
 //  2. cwd matches a workspace's repo or sits inside its worktrees dir
 //  3. cwd is inside a workspace's repo (but not at root) → ErrInsideRepo
-//  4. default_workspace
-//  5. single-workspace shortcut
+//  4. single-workspace shortcut
+//
+// When none of the above apply, Resolve returns ("", nil, nil) — a
+// success result meaning "no workspace selected; the caller should
+// prompt." The interactive menu treats this as "open the
+// workspace-select view"; non-interactive commands surface their own
+// error pointing the user at --workspace.
 func Resolve(cfg *Config, explicit, cwd string) (string, *Workspace, error) {
 	if explicit != "" {
 		w, ok := cfg.Workspaces[explicit]
@@ -146,17 +150,12 @@ func Resolve(cfg *Config, explicit, cwd string) (string, *Workspace, error) {
 		}
 	}
 
-	if cfg.DefaultWorkspace != "" {
-		w := cfg.Workspaces[cfg.DefaultWorkspace]
-		return cfg.DefaultWorkspace, &w, nil
-	}
 	if len(cfg.Workspaces) == 1 {
 		for name, w := range cfg.Workspaces {
 			return name, &w, nil
 		}
 	}
-	return "", nil, fmt.Errorf("no workspace matches this directory: pass --workspace, set default_workspace, or run `sam workspace add` (have: %s)",
-		workspaceNames(cfg))
+	return "", nil, nil
 }
 
 // IsInsideRepo reports whether err is the in-repo-subdir guidance error.
@@ -218,12 +217,6 @@ func expandHome(path, home string) string {
 func validate(cfg *Config) error {
 	if len(cfg.Workspaces) == 0 {
 		return fmt.Errorf("no workspaces configured")
-	}
-	if cfg.DefaultWorkspace != "" {
-		if _, ok := cfg.Workspaces[cfg.DefaultWorkspace]; !ok {
-			return fmt.Errorf("default_workspace %q is not defined (have: %s)",
-				cfg.DefaultWorkspace, workspaceNames(cfg))
-		}
 	}
 
 	for name, w := range cfg.Workspaces {
