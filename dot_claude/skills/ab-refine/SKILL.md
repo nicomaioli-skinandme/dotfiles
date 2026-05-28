@@ -82,6 +82,20 @@ operator. When it is an experiment:
   (**nested experiment** — confounds results; flag it).
 - Confirm the issue carries an **experiment name**. If missing, call it out.
 
+### 3b. Follow linked issues to their shipped PRs
+
+If the issue references a prior ticket (e.g. "original experiment", "V2 of
+#NNNN", "rerun", "re-implement as built in …"), read the merged PR(s) on that
+linked issue before drawing conclusions about what exists in code. The
+ticket's prose description of what was built can drift from what actually
+shipped — trust the merged diff, not the ticket text.
+
+`gh issue view <linked> --json closedByPullRequestsReferences,timelineItems`
+to find the PR(s); then `git show <sha> --stat` and read the diff. Pay
+particular attention when the shipped PR's title/scope differs from the
+linked ticket's title — that's a signal the implementation was reshaped
+mid-flight and the new ticket may be mis-citing what was built.
+
 ### 4. Clarify (interactive loop)
 
 When the issue, or how it fits the codebase, is genuinely unclear, ask the
