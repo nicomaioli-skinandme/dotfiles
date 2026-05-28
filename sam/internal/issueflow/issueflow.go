@@ -162,8 +162,14 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 	}
 
 	// A branch edit (branch != existing) renames the remote branch gh
-	// already created before we check it out locally.
+	// already created before we check it out locally. Fetch first so
+	// origin/<existing> is locally resolvable as the push source —
+	// `existing` came from the GitHub API (ghx.IssueDevelopList), not from
+	// local refs, so the remote-tracking ref may not exist yet.
 	if existing != "" && branch != existing {
+		if err := gitx.Fetch(ws.Repo); err != nil {
+			return "", err
+		}
 		if err := gitx.PushRefspec(ws.Repo, "origin/"+existing, branch); err != nil {
 			return "", err
 		}
