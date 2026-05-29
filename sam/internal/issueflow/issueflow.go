@@ -196,8 +196,9 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 		return "", err
 	}
 
-	if !tmuxx.HasSession(branch) {
-		if err := tmuxx.BuildSession(branch, ws, path); err != nil {
+	session := tmuxx.SessionName(workspaceName, branch)
+	if !tmuxx.HasSession(session) {
+		if err := tmuxx.BuildSession(session, ws, path); err != nil {
 			return "", err
 		}
 		data := tmuxx.ClaudeData{
@@ -206,11 +207,11 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 			IssueRepo:   issueRepo,
 			IssueURL:    fmt.Sprintf("https://github.com/%s/issues/%d", issueRepo, issueNum),
 		}
-		if err := tmuxx.AddClaudePane(branch, ws, data, path); err != nil {
+		if err := tmuxx.AddClaudePane(session, ws, data, path); err != nil {
 			return "", err
 		}
 	}
-	return branch, nil
+	return session, nil
 }
 
 // FilterBacklog returns items whose repo is in repos AND status is in
