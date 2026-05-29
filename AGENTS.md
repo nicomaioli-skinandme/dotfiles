@@ -109,8 +109,9 @@ chezmoi apply        # materializes ~/.claude/skills/<name>/SKILL.md
 ## Sam
 
 `sam/` is a Go CLI for tmux + git-worktree workflows. It has its own
-agent guidance and a project glossary that defines the canonical
-meaning of recurring terms (workspace, worktree, GitHub Project, main
-branch, backlog, etc.). Load it when working on anything under `sam/`:
+agent guidance and a project glossary that disambiguates which system a
+term refers to — git, GitHub, tmux, or sam (branch, issue, session,
+workspace, worktree, GitHub Project, etc.). Load it when working on
+anything under `sam/`:
 
 @sam/AGENTS.md

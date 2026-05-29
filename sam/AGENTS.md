@@ -2,25 +2,31 @@
 
 ## Glossary
 
-`GLOSSARY.md` (in this directory) is the shared vocabulary for sam —
-between contributors and agents. Treat it as authoritative for what
-specific terms mean in this codebase. When the user says "workspace",
-"worktree", "GitHub Project", "main branch", "backlog", etc., interpret
-those terms per the glossary and do not ask for disambiguation.
+`GLOSSARY.md` (in this directory) disambiguates which system a term
+refers to — git, GitHub, tmux, or sam — and flags words that already
+name another system's entity. Treat it as authoritative. When the user
+says "branch", "issue", "session", "workspace", "worktree", "GitHub
+Project", etc., interpret those terms per the glossary and do not ask
+for disambiguation.
 
-When writing code, config keys, commit messages, or user-facing
-strings, use the canonical spellings and casings from the glossary:
+A few conventions the glossary fixes:
 
-- `gh_project` (config) / `GhProject` (Go) / "GitHub Project"
-  (user-facing) — never bare "project".
+- "GitHub Project" in user-facing strings — never the bare word
+  "project", which is *reserved* (it names a GitHub entity).
 - `workspace` and `worktree` are not interchangeable.
-- `main_branch` / `MainBranch` for the workspace trunk; "main repo" is
-  the synthetic menu entry, not a separate concept.
-- The always-on tmux session is literally named `system`.
+- "main repo" is the synthetic menu entry for the main branch, not a
+  separate concept.
 
-If you introduce a new recurring term — in code, config, or
-docs — that another contributor or agent could plausibly confuse with
-an existing one, add an entry to `GLOSSARY.md` in the same change.
+The glossary is conceptual, not an implementation reference. Keep code
+spellings (config keys, Go types, env vars) out of it — they drift out
+of sync. When code needs to point at a glossary concept, reference the
+*term* in a comment, and only when it genuinely aids understanding.
+
+Only add a new entry when a term could be confused with another
+system's entity or would pollute a namespace — not for every new
+feature or field. When a term has an accepted alternate form, record it
+as an *alias* on the existing entry rather than adding a duplicate; when
+a word already names another system's entity, flag it as *reserved*.
 
 ## Active config is always in scope
 
