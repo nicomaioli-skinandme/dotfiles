@@ -114,6 +114,41 @@ main_branch = "master"
 	}
 }
 
+const soloWorkspace = `
+[workspaces.solo]
+repo        = "/x"
+worktrees   = "/y"
+main_branch = "main"
+`
+
+func TestLoad_AutocompleteMaxDefault(t *testing.T) {
+	// Absent [tui] section defaults the cap.
+	path := writeConfig(t, soloWorkspace)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Tui.Autocomplete.Max != DefaultAutocompleteMax {
+		t.Errorf("default max: got %d want %d", cfg.Tui.Autocomplete.Max, DefaultAutocompleteMax)
+	}
+
+	// Explicit value is honored.
+	path = writeConfig(t, soloWorkspace+"\n[tui.autocomplete]\nmax = 2\n")
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Tui.Autocomplete.Max != 2 {
+		t.Errorf("explicit max: got %d want 2", cfg.Tui.Autocomplete.Max)
+	}
+
+	// Negative value is rejected.
+	path = writeConfig(t, soloWorkspace+"\n[tui.autocomplete]\nmax = -1\n")
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for negative max")
+	}
+}
+
 func TestResolve_SingleWorkspaceNoDefault(t *testing.T) {
 	body := `
 [workspaces.solo]

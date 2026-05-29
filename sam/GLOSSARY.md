@@ -126,6 +126,22 @@ uses `main_branch`).
   sam attaches to are real, externally-named sessions — sam uses their
   names verbatim and never applies the prefix.
 
+## TUI settings
+
+Top-level, workspace-independent settings for the interactive menu (the
+`sam menu` full-screen front end), as opposed to per-workspace config.
+
+- **Config:** `[tui]` in `~/.config/sam/config.toml` (a sibling of the
+  `[workspaces.*]` tables, not nested under a workspace).
+- **Go type:** `config.Tui`.
+- Currently holds `[tui.autocomplete]` (`config.Autocomplete`) with `max`
+  — the most entries shown at once in the `:` command popup (default
+  `config.DefaultAutocompleteMax`, 5).
+
+Distinct from a workspace's `tmux` layout: `[tui]` configures sam's own
+on-screen menu; `[workspaces.<name>.tmux]` configures the tmux session
+sam builds for a worktree.
+
 ## `from-issue` flow
 
 `sam from-issue` end-to-end: pick a backlog issue (from a configured

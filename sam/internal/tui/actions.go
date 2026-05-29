@@ -327,6 +327,28 @@ func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 
 // handleInputKey drives the top bar while in search or command mode.
 func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Command-mode popup navigation. These keys steer the autocomplete
+	// rather than editing the input, so they're handled before the
+	// textinput sees them. Tab/Shift+Tab "complete" by filling the input
+	// with the highlighted entry without re-filtering (so the list keeps
+	// its full shape and repeated presses cycle through it).
+	if m.mode == modeCommand && m.ac.Visible() {
+		switch msg.String() {
+		case "up":
+			m.ac.Move(-1)
+			return m, nil
+		case "down":
+			m.ac.Move(1)
+			return m, nil
+		case "tab":
+			m.completeFromPopup(1)
+			return m, nil
+		case "shift+tab":
+			m.completeFromPopup(-1)
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "esc":
 		if m.mode == modeSearch {
@@ -342,7 +364,16 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.leaveInput()
 			return m, nil
 		}
+		// Prefer the highlighted entry over the raw text so Enter on a
+		// partial query runs the selection. Only when the user has
+		// actually typed something, though: a bare `:` then Enter stays a
+		// no-op rather than firing whatever sits first in the popup.
 		raw := m.input.Value()
+		if raw != "" {
+			if sel, ok := m.ac.Selected(); ok {
+				raw = sel
+			}
+		}
 		cmd := parseCommand(raw)
 		m.leaveInput()
 		switch cmd.kind {
@@ -361,5 +392,20 @@ func (m *model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.query = m.input.Value()
 		m.applyFilter()
 	}
+	if m.mode == modeCommand {
+		m.ac.SetQuery(m.input.Value())
+	}
 	return m, c
+}
+
+// completeFromPopup cycles the popup highlight by delta (wrapping) and
+// fills the input with the now-highlighted entry. It deliberately does not
+// call SetQuery, so the candidate list keeps its shape and successive
+// Tab/Shift+Tab presses walk through every entry.
+func (m *model) completeFromPopup(delta int) {
+	m.ac.Cycle(delta)
+	if sel, ok := m.ac.Selected(); ok {
+		m.input.SetValue(sel)
+		m.input.CursorEnd()
+	}
 }

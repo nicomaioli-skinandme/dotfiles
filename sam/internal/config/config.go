@@ -15,7 +15,23 @@ import (
 
 type Config struct {
 	Workspaces map[string]Workspace `mapstructure:"workspaces" toml:"workspaces"`
+	Tui        Tui                  `mapstructure:"tui" toml:"tui,omitempty"`
 }
+
+// Tui holds settings for the interactive menu (the `sam menu` TUI), as
+// opposed to per-workspace configuration.
+type Tui struct {
+	Autocomplete Autocomplete `mapstructure:"autocomplete" toml:"autocomplete,omitempty"`
+}
+
+// Autocomplete configures the `:` command popup. Max is the most entries
+// shown at once; 0 means "use the default".
+type Autocomplete struct {
+	Max int `mapstructure:"max" toml:"max,omitempty"`
+}
+
+// DefaultAutocompleteMax is applied when [tui.autocomplete] max is unset.
+const DefaultAutocompleteMax = 5
 
 type Workspace struct {
 	Repo          string     `mapstructure:"repo" toml:"repo"`
@@ -102,6 +118,10 @@ func Load(path string) (*Config, error) {
 
 	if err := validate(&cfg); err != nil {
 		return nil, err
+	}
+
+	if cfg.Tui.Autocomplete.Max == 0 {
+		cfg.Tui.Autocomplete.Max = DefaultAutocompleteMax
 	}
 	return &cfg, nil
 }
@@ -217,6 +237,10 @@ func expandHome(path, home string) string {
 func validate(cfg *Config) error {
 	if len(cfg.Workspaces) == 0 {
 		return fmt.Errorf("no workspaces configured")
+	}
+
+	if cfg.Tui.Autocomplete.Max < 0 {
+		return fmt.Errorf("tui.autocomplete.max must be >= 0")
 	}
 
 	for name, w := range cfg.Workspaces {

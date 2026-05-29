@@ -36,7 +36,7 @@ func TestParseCommand(t *testing.T) {
 
 // testModel builds a model with a fixed item set for state tests.
 func testModel(items []Item) *model {
-	m := newModel("ws", &config.Workspace{MainBranch: "main"}, nil, ResWorktrees)
+	m := newModel("ws", &config.Workspace{MainBranch: "main"}, nil, ResWorktrees, config.Tui{})
 	m.items = items
 	m.applyFilter()
 	return m
@@ -141,7 +141,7 @@ func TestSwitchResourceResetsState(t *testing.T) {
 }
 
 func TestActivateIssueStartsFlow(t *testing.T) {
-	m := newModel("ws", &config.Workspace{}, nil, ResIssues)
+	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{})
 	m.resource = ResIssues
 	m.items = []Item{{ID: "owner/repo#42", Title: "#42 thing"}}
 	m.issues = map[string]issueflow.Issue{
@@ -164,7 +164,7 @@ func TestActivateIssueStartsFlow(t *testing.T) {
 }
 
 func TestBranchEditModalRenders(t *testing.T) {
-	m := newModel("ws", &config.Workspace{MaxBranchLen: 5}, nil, ResIssues)
+	m := newModel("ws", &config.Workspace{MaxBranchLen: 5}, nil, ResIssues, config.Tui{})
 	m.pending = &fromIssueState{branch: "1-really-long-branch"}
 
 	// Branch exceeds the limit, so the edit modal opens without applying.
@@ -212,7 +212,7 @@ func TestStatusBarStaysOneLine(t *testing.T) {
 }
 
 func TestFromIssuePreparedPromptsReassign(t *testing.T) {
-	m := newModel("ws", &config.Workspace{}, nil, ResIssues)
+	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{})
 	m.handleFromIssuePrepared(fromIssuePreparedMsg{
 		issue:  issueflow.Issue{Number: 1, Assignees: []string{"someone-else"}},
 		me:     "me",
@@ -228,7 +228,7 @@ func TestFromIssuePreparedPromptsReassign(t *testing.T) {
 
 func TestActivateWorktreeBuildsResult(t *testing.T) {
 	ws := &config.Workspace{MainBranch: "main", Repo: "/repo", Worktrees: "/wt"}
-	m := newModel("ws", ws, nil, ResWorktrees)
+	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{})
 	m.items = []Item{{ID: "feat-x", Title: "feat-x"}}
 	m.applyFilter()
 
@@ -253,7 +253,7 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 	wsA := config.Workspace{MainBranch: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
 	wsB := config.Workspace{MainBranch: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
 	all := map[string]config.Workspace{"a": wsA, "b": wsB}
-	m := newModel("a", &wsA, all, ResWorktrees)
+	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{})
 
 	// Simulate the user invoking `:workspaces` and picking "b".
 	if cmd := m.switchWorkspace("b"); cmd == nil {
@@ -280,7 +280,7 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 }
 
 func TestDeleteGuardsMainRepo(t *testing.T) {
-	m := newModel("ws", &config.Workspace{MainBranch: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees)
+	m := newModel("ws", &config.Workspace{MainBranch: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{})
 	m.items = []Item{{ID: "main", Title: "main"}}
 	m.applyFilter()
 

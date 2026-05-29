@@ -44,6 +44,7 @@ type model struct {
 
 	mode  inputMode
 	input textinput.Model
+	ac    autocomplete // `:` command popup
 
 	loading bool
 	spinner spinner.Model
@@ -65,7 +66,7 @@ type snapshot struct {
 	query      string
 }
 
-func newModel(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource) *model {
+func newModel(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui) *model {
 	ti := textinput.New()
 	ti.SetVirtualCursor(true)
 
@@ -80,6 +81,7 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		selected:      map[string]bool{},
 		input:         ti,
 		spinner:       sp,
+		ac:            newAutocomplete(tuiCfg.Autocomplete.Max),
 	}
 }
 
@@ -219,15 +221,18 @@ func (m *model) enterMode(mode inputMode) {
 		m.input.SetValue(m.query)
 	case modeCommand:
 		m.input.Prompt = ":"
+		m.ac.Open(commandCandidates())
 	}
 	m.input.CursorEnd()
 	m.input.Focus()
 }
 
-// leaveInput returns to normal mode and blurs the top bar.
+// leaveInput returns to normal mode, blurs the top bar, and dismisses the
+// command popup (a no-op when it was never open).
 func (m *model) leaveInput() {
 	m.mode = modeNormal
 	m.input.Blur()
+	m.ac.Close()
 }
 
 // back handles <ESC>/h: dismiss help, pop a pushed view, or clear the

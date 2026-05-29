@@ -29,6 +29,14 @@ var (
 			Padding(1, 3)
 	modalAffirm = lipgloss.NewStyle().Padding(0, 2)
 	modalActive = lipgloss.NewStyle().Padding(0, 2).Reverse(true).Bold(true)
+	// Autocomplete popup: same rounded frame as the modal but tighter
+	// padding (a list wants less internal whitespace than a dialog).
+	autocompleteBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("213")).
+				Padding(0, 1)
+	acMatchStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
+	acSelectedStyle = lipgloss.NewStyle().Reverse(true)
 )
 
 func (m *model) View() tea.View {
@@ -44,13 +52,25 @@ func (m *model) View() tea.View {
 		m.renderStatusBar(),
 	)
 
-	if m.modal.kind == modalNone {
-		v := tea.NewView(base)
+	if m.modal.kind != modalNone {
+		v := tea.NewView(m.overlay(base, m.renderModal()))
 		v.AltScreen = true
 		return v
 	}
 
-	v := tea.NewView(m.overlay(base, m.renderModal()))
+	// The autocomplete popup floats under the focused input. It never
+	// coexists with a modal (no modal is open during `:`), so the modal
+	// branch above takes precedence.
+	if m.ac.Visible() {
+		popup := m.ac.View(m.width)
+		anchor := anchorPos{row: 0, col: lipgloss.Width(m.input.Prompt)}
+		x, y := m.ac.Position(anchor, lipgloss.Width(popup), lipgloss.Height(popup), m.width, m.height)
+		v := tea.NewView(m.overlayAt(base, popup, x, y, 1))
+		v.AltScreen = true
+		return v
+	}
+
+	v := tea.NewView(base)
 	v.AltScreen = true
 	return v
 }
@@ -256,11 +276,9 @@ func (m *model) helpText() string {
 	return strings.Join(lines, "\n")
 }
 
-// overlay composites a centered modal over the dimmed base using a
-// lipgloss canvas.
+// overlay composites a centered modal over the base using a lipgloss
+// canvas.
 func (m *model) overlay(base, modal string) string {
-	canvas := lipgloss.NewCanvas(m.width, m.height)
-	canvas.Compose(lipgloss.NewLayer(base))
 	mw, mh := lipgloss.Width(modal), lipgloss.Height(modal)
 	x := (m.width - mw) / 2
 	y := (m.height - mh) / 2
@@ -270,7 +288,24 @@ func (m *model) overlay(base, modal string) string {
 	if y < 0 {
 		y = 0
 	}
-	canvas.Compose(lipgloss.NewLayer(modal).X(x).Y(y).Z(1))
+	return m.overlayAt(base, modal, x, y, 1)
+}
+
+// overlayAt composites layer over base at (x, y) with the given z-index.
+// It is the single compositing path shared by the centered modal (overlay)
+// and the anchored autocomplete popup.
+//
+// Positioning must go through a Compositor: a Layer drawn directly onto a
+// Canvas ignores its own X/Y and fills the whole canvas area, so composing
+// base and layer as separate Canvas.Compose calls would place the layer at
+// the origin and clobber the base. The Compositor flattens the layers to
+// their absolute bounds and draws each in z order.
+func (m *model) overlayAt(base, layer string, x, y, z int) string {
+	canvas := lipgloss.NewCanvas(m.width, m.height)
+	canvas.Compose(lipgloss.NewCompositor(
+		lipgloss.NewLayer(base),
+		lipgloss.NewLayer(layer).X(x).Y(y).Z(z),
+	))
 	return canvas.Render()
 }
 

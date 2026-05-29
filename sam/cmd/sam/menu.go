@@ -38,7 +38,7 @@ func runMenu(start tui.Resource) error {
 		start = tui.ResWorkspaces
 	}
 
-	res, err := tui.Run(name, workspace, cfg.Workspaces, start)
+	res, err := tui.Run(name, workspace, cfg.Workspaces, start, cfg.Tui)
 	if err != nil {
 		return err
 	}

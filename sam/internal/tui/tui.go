@@ -16,6 +16,7 @@
 package tui
 
 import (
+	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -60,6 +61,21 @@ func resourceByName(s string) (Resource, bool) {
 	return 0, false
 }
 
+// commandCandidates lists the words the `:` autocomplete can complete to:
+// every resource name plus "quit" (the long form of :q). Built from the
+// resources slice so a new resource shows up automatically. Sorted only
+// for a stable empty-query display order; fuzzy.Find re-ranks once the
+// user types.
+func commandCandidates() []string {
+	out := make([]string, 0, len(resources)+1)
+	out = append(out, "quit")
+	for _, r := range resources {
+		out = append(out, r.Name())
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Item is one row in the central list. ID is the row's stable identity
 // (used for multi-select and to drive the activation/delete actions);
 // Title is the display text; Detail is optional trailing context;
@@ -95,9 +111,10 @@ type Result struct {
 
 // Run launches the full-screen TUI against the given workspace and
 // returns the action the user chose. all is the set of configured
-// workspaces (for `:workspaces`); start is the resource to open on.
-func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource) (Result, error) {
-	m := newModel(workspaceName, workspace, all, start)
+// workspaces (for `:workspaces`); start is the resource to open on;
+// tuiCfg carries menu-level settings (e.g. autocomplete sizing).
+func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui) (Result, error) {
+	m := newModel(workspaceName, workspace, all, start, tuiCfg)
 	final, err := tea.NewProgram(m).Run()
 	if err != nil {
 		return Result{}, err
