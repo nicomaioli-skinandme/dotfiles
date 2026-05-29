@@ -233,7 +233,7 @@ func TestActivateWorktreeBuildsResult(t *testing.T) {
 	m.applyFilter()
 
 	m.activate()
-	if m.result.Attach != "feat-x" {
+	if m.result.Attach != "ws-feat-x" {
 		t.Fatalf("attach: got %q", m.result.Attach)
 	}
 	// No live tmux session in tests, so a build spec must be present.

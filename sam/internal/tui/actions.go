@@ -56,16 +56,17 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 // doesn't already exist), mirroring the old menu's selection logic.
 func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
 	name := it.ID
+	session := tmuxx.SessionName(m.workspaceName, name)
 	switch {
-	case tmuxx.HasSession(name):
+	case tmuxx.HasSession(session):
 		m.result = Result{
-			Attach:        name,
+			Attach:        session,
 			Workspace:     m.workspace,
 			WorkspaceName: m.workspaceName,
 		}
 	case name == m.workspace.MainBranch:
 		m.result = Result{
-			Attach:        name,
+			Attach:        session,
 			Build:         &BuildSpec{BaseDir: m.workspace.Repo},
 			Workspace:     m.workspace,
 			WorkspaceName: m.workspaceName,
@@ -73,7 +74,7 @@ func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
 	default:
 		baseDir := filepath.Join(m.workspace.Worktrees, name)
 		m.result = Result{
-			Attach:        name,
+			Attach:        session,
 			Build:         &BuildSpec{BaseDir: baseDir},
 			Workspace:     m.workspace,
 			WorkspaceName: m.workspaceName,
@@ -276,17 +277,18 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 		m.status = "cannot delete the main repo"
 		return m, nil
 	}
-	if cur, _ := tmuxx.CurrentSession(); cur == it.ID {
+	if cur, _ := tmuxx.CurrentSession(); cur == tmuxx.SessionName(m.workspaceName, it.ID) {
 		m.status = "cannot delete the session you're attached to"
 		return m, nil
 	}
 	target := it.ID
 	ws := m.workspace
+	wsName := m.workspaceName
 	m.modal = modalState{
 		kind:  modalConfirm,
 		title: fmt.Sprintf("Delete worktree %q?", target),
 		onConfirm: func() tea.Cmd {
-			return deleteWorktreeCmd(ws, target)
+			return deleteWorktreeCmd(ws, wsName, target)
 		},
 	}
 	return m, nil
@@ -294,10 +296,11 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 
 // deleteWorktreeCmd kills the session (if any) and force-removes the
 // worktree, off the UI goroutine.
-func deleteWorktreeCmd(ws *config.Workspace, target string) tea.Cmd {
+func deleteWorktreeCmd(ws *config.Workspace, wsName, target string) tea.Cmd {
 	return func() tea.Msg {
-		if tmuxx.HasSession(target) {
-			if err := tmuxx.KillSession(target); err != nil {
+		session := tmuxx.SessionName(wsName, target)
+		if tmuxx.HasSession(session) {
+			if err := tmuxx.KillSession(session); err != nil {
 				return actionDoneMsg{err: err}
 			}
 		}

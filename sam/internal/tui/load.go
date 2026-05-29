@@ -71,6 +71,7 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 
 func (m *model) loadWorktrees() tea.Cmd {
 	ws := m.workspace
+	wsName := m.workspaceName
 	return func() tea.Msg {
 		worktrees, err := gitx.Worktrees(ws.Worktrees)
 		if err != nil {
@@ -81,11 +82,11 @@ func (m *model) loadWorktrees() tea.Cmd {
 				ID:     ws.MainBranch,
 				Title:  ws.MainBranch,
 				Detail: "main repo",
-				Active: tmuxx.HasSession(ws.MainBranch),
+				Active: tmuxx.HasSession(tmuxx.SessionName(wsName, ws.MainBranch)),
 			},
 		}
 		for _, w := range worktrees {
-			items = append(items, Item{ID: w, Title: w, Active: tmuxx.HasSession(w)})
+			items = append(items, Item{ID: w, Title: w, Active: tmuxx.HasSession(tmuxx.SessionName(wsName, w))})
 		}
 		return itemsLoadedMsg{resource: ResWorktrees, items: items}
 	}

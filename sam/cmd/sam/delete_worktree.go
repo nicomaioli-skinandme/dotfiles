@@ -25,11 +25,11 @@ func newDeleteCmd() *cobra.Command {
 				// Worktree selection + delete confirmation happen in the TUI.
 				return runMenu(tui.ResWorktrees)
 			}
-			_, workspace, err := loadWorkspace()
+			workspaceName, workspace, err := loadWorkspace()
 			if err != nil {
 				return err
 			}
-			return runDelete(cmd.OutOrStdout(), workspace, args[0])
+			return runDelete(cmd.OutOrStdout(), workspaceName, workspace, args[0])
 		},
 	}
 }
@@ -38,7 +38,7 @@ func newDeleteCmd() *cobra.Command {
 // is always provided (the CLI arg); interactive selection lives in the
 // TUI. When the caller is currently inside the target session it confirms
 // first and hops to the workspace's main repo.
-func runDelete(out io.Writer, workspace *config.Workspace, target string) error {
+func runDelete(out io.Writer, workspaceName string, workspace *config.Workspace, target string) error {
 	candidates, err := gitx.Worktrees(workspace.Worktrees)
 	if err != nil {
 		return err
@@ -54,8 +54,11 @@ func runDelete(out io.Writer, workspace *config.Workspace, target string) error 
 		return fmt.Errorf("worktree %q not found under %s", target, workspace.Worktrees)
 	}
 
+	mainSession := tmuxx.SessionName(workspaceName, workspace.MainBranch)
+	targetSession := tmuxx.SessionName(workspaceName, target)
+
 	current, _ := tmuxx.CurrentSession()
-	if current == target {
+	if current == targetSession {
 		ok, err := ui.Confirm(fmt.Sprintf("Currently in '%s'. Delete anyway?", target))
 		if err != nil {
 			if errors.Is(err, ui.ErrCancelled) {
@@ -66,18 +69,18 @@ func runDelete(out io.Writer, workspace *config.Workspace, target string) error 
 		if !ok {
 			return nil
 		}
-		if !tmuxx.HasSession(workspace.MainBranch) {
-			if err := tmuxx.BuildSession(workspace.MainBranch, workspace, workspace.Repo); err != nil {
+		if !tmuxx.HasSession(mainSession) {
+			if err := tmuxx.BuildSession(mainSession, workspace, workspace.Repo); err != nil {
 				return err
 			}
 		}
-		if err := tmuxx.SwitchOrAttach(workspace.MainBranch); err != nil {
+		if err := tmuxx.SwitchOrAttach(mainSession); err != nil {
 			return err
 		}
 	}
 
-	if tmuxx.HasSession(target) {
-		if err := tmuxx.KillSession(target); err != nil {
+	if tmuxx.HasSession(targetSession) {
+		if err := tmuxx.KillSession(targetSession); err != nil {
 			return err
 		}
 	}

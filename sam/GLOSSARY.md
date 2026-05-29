@@ -106,6 +106,26 @@ for each worktree.
 - `workspace.from_issue.repo_window` references a window `name` from
   this layout; config load fails if the reference doesn't resolve.
 
+## tmux session name
+
+The name of the tmux session sam creates for a worktree (or the
+synthetic main repo). Canonical format: `<workspace>-<branch>` — the
+workspace name, a hyphen, then the branch / worktree name (the main repo
+uses `main_branch`).
+
+- **Built by:** `tmuxx.SessionName(workspace, branch)`; every site that
+  creates, looks up, kills, or attaches to a sam session derives the name
+  through it, so they all agree.
+- **Why the prefix:** with multiple workspaces, bare branch names collide
+  in tmux's cross-workspace views (`tmux ls`, status bar,
+  `switch-client`); the workspace prefix disambiguates them.
+- **Distinct from the branch / worktree name:** sam's own `list` and the
+  TUI still show the bare branch (those views are already scoped to one
+  workspace); the prefix lives only in the underlying tmux session name.
+- **Exempt:** the always-on `system` session and any clanker session
+  sam attaches to are real, externally-named sessions — sam uses their
+  names verbatim and never applies the prefix.
+
 ## `from-issue` flow
 
 `sam from-issue` end-to-end: pick a backlog issue (from a configured
