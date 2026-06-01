@@ -46,9 +46,10 @@ type model struct {
 	input textinput.Model
 	ac    autocomplete // `:` command popup
 
-	loading bool
-	spinner spinner.Model
-	status  string // transient message line (errors, "no issues", etc.)
+	loading  bool
+	deleting map[string]bool // worktree IDs with an in-flight delete
+	spinner  spinner.Model
+	status   string // transient message line (errors, "no issues", etc.)
 
 	modal modalState
 
@@ -79,6 +80,7 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		all:           all,
 		resource:      start,
 		selected:      map[string]bool{},
+		deleting:      map[string]bool{},
 		input:         ti,
 		spinner:       sp,
 		ac:            newAutocomplete(tuiCfg.Autocomplete.Max),
@@ -99,7 +101,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case spinner.TickMsg:
-		if m.loading {
+		if m.loading || len(m.deleting) > 0 {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd

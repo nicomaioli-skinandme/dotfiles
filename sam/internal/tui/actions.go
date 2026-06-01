@@ -18,6 +18,7 @@ import (
 // actionDoneMsg reports the result of an in-TUI mutation (e.g. delete)
 // so the model can refresh and surface a status line.
 type actionDoneMsg struct {
+	target string // worktree ID the mutation acted on, so the model can clear its in-flight state
 	reload bool
 	info   string
 	err    error
@@ -288,7 +289,9 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 		kind:  modalConfirm,
 		title: fmt.Sprintf("Delete worktree %q?", target),
 		onConfirm: func() tea.Cmd {
-			return deleteWorktreeCmd(ws, wsName, target)
+			m.deleting[target] = true
+			m.status = ""
+			return tea.Batch(m.spinner.Tick, deleteWorktreeCmd(ws, wsName, target))
 		},
 	}
 	return m, nil
@@ -301,19 +304,20 @@ func deleteWorktreeCmd(ws *config.Workspace, wsName, target string) tea.Cmd {
 		session := tmuxx.SessionName(wsName, target)
 		if tmuxx.HasSession(session) {
 			if err := tmuxx.KillSession(session); err != nil {
-				return actionDoneMsg{err: err}
+				return actionDoneMsg{target: target, err: err}
 			}
 		}
 		if err := gitx.WorktreeRemoveForce(ws.Repo, filepath.Join(ws.Worktrees, target)); err != nil {
-			return actionDoneMsg{err: err}
+			return actionDoneMsg{target: target, err: err}
 		}
-		return actionDoneMsg{reload: true, info: "deleted " + target}
+		return actionDoneMsg{target: target, reload: true, info: "deleted " + target}
 	}
 }
 
 // handleActionDone refreshes the list after a mutation and reports the
 // outcome in the status line.
 func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
+	delete(m.deleting, msg.target)
 	if msg.err != nil {
 		m.status = "action failed"
 		return m, nil

@@ -152,7 +152,10 @@ func (m *model) renderRow(it Item, isCursor bool) string {
 	}
 
 	line := fmt.Sprintf("%s%s %s%s", cursor, sel, bullet, title)
-	if it.Detail != "" {
+	switch {
+	case m.deleting[it.ID]:
+		line += "  " + m.spinner.View() + " " + detailStyle.Render("deleting…")
+	case it.Detail != "":
 		line += "  " + detailStyle.Render("("+it.Detail+")")
 	}
 	return truncate(line, m.width)
