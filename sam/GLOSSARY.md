@@ -16,30 +16,29 @@ It is deliberately narrow:
 
 Two annotations appear on entries:
 
-- ***Alias*** — an accepted alternate form of the same term (e.g. `repo`
+- **_Alias_** — an accepted alternate form of the same term (e.g. `repo`
   ↔ `repository`). Interchangeable; recorded on the one entry, never
   duplicated as a second one.
-- ***Reserved*** — a word that already names another system's entity and
+- **_Reserved_** — a word that already names another system's entity and
   must not be reused for a sam concept (e.g. `project`). Forbidden, not
   interchangeable — the opposite of an alias.
 
 ## git
 
 - **branch** — a git branch.
-- **repo** — the git repository a workspace points at. *Alias:*
+- **repo** — the git repository a workspace points at. _Alias:_
   repository.
 - **worktree** — a [git worktree](https://git-scm.com/docs/git-worktree):
   an additional checkout of a repo on its own branch. Not a
-  **workspace** — see below.
 
 ## GitHub
 
 - **issue** — a GitHub issue.
-- **pull request** — a GitHub pull request. *Alias:* PR. sam surfaces the
+- **pull request** — a GitHub pull request. _Alias:_ PR. sam surfaces the
   open PRs in a workspace's repo that request you as a reviewer via the
   **prs** view; selecting one creates a **worktree** on the PR's head
   branch for review.
-- **project** — ***reserved***. "Project" means a
+- **project** — **_reserved_**. "Project" means a
   [GitHub Project (v2)](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
   board. Never reuse the bare word for a sam concept; always write
   "GitHub Project" in user-facing text. If you need to name a new sam
