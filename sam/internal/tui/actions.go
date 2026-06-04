@@ -12,6 +12,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 )
 
@@ -47,6 +48,8 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 		return m, m.switchWorkspace(it.ID)
 	case ResIssues:
 		return m.activateIssue(it)
+	case ResPRs:
+		return m.activatePR(it)
 	case ResClankers:
 		return m.activateClanker(it)
 	}
@@ -229,6 +232,48 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Quit
 }
 
+// fromPRDoneMsg reports the result of the PR review bootstrap (prflow.Apply).
+type fromPRDoneMsg struct {
+	session string
+	err     error
+}
+
+// activatePR bootstraps a review worktree for the picked PR. Unlike the
+// issue flow there are no modals (no reassign/branch-edit): we check out
+// the PR's existing head branch, so this just runs prflow.Apply behind a
+// spinner and attaches.
+func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
+	pr, ok := m.prs[it.ID]
+	if !ok {
+		m.status = "no PR data for " + it.ID
+		return m, nil
+	}
+	m.loading = true
+	m.status = ""
+	ws := m.workspace
+	wsName := m.workspaceName
+	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
+		session, err := prflow.Apply(ws, wsName, pr)
+		return fromPRDoneMsg{session: session, err: err}
+	})
+}
+
+// handleFromPRDone records the session to attach to and quits, or
+// surfaces an error and stays.
+func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
+	m.loading = false
+	if msg.err != nil {
+		m.status = "gh errored"
+		return m, nil
+	}
+	m.result = Result{
+		Attach:        msg.session,
+		Workspace:     m.workspace,
+		WorkspaceName: m.workspaceName,
+	}
+	return m, tea.Quit
+}
+
 // activateClanker attaches to the clanker's tmux session when it has one.
 func (m *model) activateClanker(it Item) (tea.Model, tea.Cmd) {
 	if !tmuxx.HasSession(it.ID) {
@@ -251,12 +296,14 @@ func (m *model) add() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Enter the branch-pick sub-view to create a worktree from a branch.
+		// loadBranches fetches first (a network call), so show the spinner.
 		m.pushView()
 		m.branchPick = true
 		m.query = ""
 		m.cursor = 0
 		m.items = nil
-		return m, m.loadBranches()
+		m.loading = true
+		return m, tea.Batch(m.spinner.Tick, m.loadBranches())
 	case ResWorkspaces:
 		// Adding a workspace runs the huh wizard, which needs the terminal.
 		m.result = Result{RunWizard: true}

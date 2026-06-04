@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
 )
 
 func TestParseCommand(t *testing.T) {
@@ -23,6 +24,7 @@ func TestParseCommand(t *testing.T) {
 		{":workspaces", command{kind: cmdResource, resource: ResWorkspaces}},
 		{"worktrees", command{kind: cmdResource, resource: ResWorktrees}},
 		{":issues", command{kind: cmdResource, resource: ResIssues}},
+		{":prs", command{kind: cmdResource, resource: ResPRs}},
 		{" :clankers ", command{kind: cmdResource, resource: ResClankers}},
 		{":bogus", command{kind: cmdUnknown}},
 	}
@@ -157,6 +159,29 @@ func TestActivateIssueStartsFlow(t *testing.T) {
 	}
 	if !m.loading {
 		t.Error("expected loading to be set while preparing")
+	}
+	if m.result.Attach != "" {
+		t.Errorf("must not set a result before the flow completes, got %q", m.result.Attach)
+	}
+}
+
+func TestActivatePRStartsFlow(t *testing.T) {
+	m := newModel("ws", &config.Workspace{}, nil, ResPRs, config.Tui{})
+	m.resource = ResPRs
+	m.items = []Item{{ID: "owner/repo#7", Title: "#7 thing"}}
+	m.prs = map[string]prflow.PR{
+		"owner/repo#7": {Number: 7, Repository: "owner/repo", Title: "thing", HeadRefName: "feat-x"},
+	}
+	m.applyFilter()
+
+	// Activating a PR kicks off the async bootstrap behind the spinner; it
+	// must not set a result or quit yet (no modals in the PR flow).
+	_, cmd := m.activate()
+	if cmd == nil {
+		t.Fatal("expected a bootstrap command from activating a PR")
+	}
+	if !m.loading {
+		t.Error("expected loading to be set while bootstrapping")
 	}
 	if m.result.Attach != "" {
 		t.Errorf("must not set a result before the flow completes, got %q", m.result.Attach)

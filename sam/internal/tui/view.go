@@ -91,7 +91,11 @@ func (m *model) renderBody() string {
 	}
 
 	if m.loading {
-		return pad(fmt.Sprintf("  %s loading %s…", m.spinner.View(), m.resource.Name()), m.width, h)
+		what := m.resource.Name()
+		if m.branchPick {
+			what = "branches"
+		}
+		return pad(fmt.Sprintf("  %s loading %s…", m.spinner.View(), what), m.width, h)
 	}
 
 	// Empty main list: fall back to a sidebar of resources plus a hint.
@@ -275,6 +279,8 @@ func (m *model) helpText() string {
 		lines = append(lines, "", "  a         new worktree", "  d         delete worktree")
 	case m.resource == ResWorkspaces:
 		lines = append(lines, "", "  enter     switch workspace", "  a         add workspace")
+	case m.resource == ResPRs:
+		lines = append(lines, "", "  enter     create worktree from PR")
 	}
 	return strings.Join(lines, "\n")
 }

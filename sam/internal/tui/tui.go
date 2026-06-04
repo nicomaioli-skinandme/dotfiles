@@ -31,11 +31,12 @@ const (
 	ResWorktrees  Resource = iota // main repo and per-branch worktrees
 	ResWorkspaces                 // configured workspaces; activate switches the active one
 	ResIssues                     // GitHub Project backlog / open issues (async)
+	ResPRs                        // open PRs requesting you as reviewer (async)
 	ResClankers                   // running claude processes and their tmux context
 )
 
 // resources lists the kinds in display/cycle order.
-var resources = []Resource{ResWorktrees, ResWorkspaces, ResIssues, ResClankers}
+var resources = []Resource{ResWorktrees, ResWorkspaces, ResIssues, ResPRs, ResClankers}
 
 func (r Resource) Name() string {
 	switch r {
@@ -45,6 +46,8 @@ func (r Resource) Name() string {
 		return "workspaces"
 	case ResIssues:
 		return "issues"
+	case ResPRs:
+		return "prs"
 	case ResClankers:
 		return "clankers"
 	}

@@ -42,6 +42,7 @@ type Workspace struct {
 	WorktreeSetup string     `mapstructure:"worktree_setup" toml:"worktree_setup,omitempty"`
 	GhProject     GhProject  `mapstructure:"gh_project" toml:"gh_project,omitempty"`
 	FromIssue     FromIssue  `mapstructure:"from_issue" toml:"from_issue,omitempty"`
+	FromPR        FromPR     `mapstructure:"from_pr" toml:"from_pr,omitempty"`
 	Tmux          TmuxLayout `mapstructure:"tmux" toml:"tmux,omitempty"`
 }
 
@@ -55,7 +56,20 @@ type GhProject struct {
 	BacklogStatuses []string `mapstructure:"backlog_statuses" toml:"backlog_statuses,omitempty"`
 }
 
+// FromIssue configures the Claude pane opened in an issue worktree.
+// There are no default prompts: an empty ClaudePrompt means no pane is
+// launched (the tmux layout is still built). RepoWindow names the tmux
+// window the pane is split into.
 type FromIssue struct {
+	ClaudePrompt    string `mapstructure:"claude_prompt" toml:"claude_prompt,omitempty"`
+	ClaudePaneTitle string `mapstructure:"claude_pane_title" toml:"claude_pane_title,omitempty"`
+	RepoWindow      string `mapstructure:"repo_window" toml:"repo_window,omitempty"`
+}
+
+// FromPR mirrors FromIssue for the `prs` review flow: the Claude pane
+// opened in a PR-review worktree. Same rule — an empty ClaudePrompt means
+// no pane is launched.
+type FromPR struct {
 	ClaudePrompt    string `mapstructure:"claude_prompt" toml:"claude_prompt,omitempty"`
 	ClaudePaneTitle string `mapstructure:"claude_pane_title" toml:"claude_pane_title,omitempty"`
 	RepoWindow      string `mapstructure:"repo_window" toml:"repo_window,omitempty"`
@@ -195,16 +209,15 @@ func isDescendant(child, parent string) bool {
 }
 
 // Default returns a Workspace with sensible defaults for the fields the
-// wizard fills silently (from_issue, tmux, max_branch_len). Callers
-// overlay user-supplied values on top.
+// wizard fills silently (tmux, max_branch_len, and the repo window the
+// Claude panes target). Callers overlay user-supplied values on top.
+// No default Claude prompts are set: until the user configures a
+// from_issue / from_pr claude_prompt, those flows launch no Claude pane.
 func Default() Workspace {
 	return Workspace{
 		MaxBranchLen: 20,
-		FromIssue: FromIssue{
-			ClaudePrompt:    "/plan pull the context from {{ .IssueURL }}, including comments. Plan to implement, ask any relevant questions.",
-			ClaudePaneTitle: "IMPL {{ .IssueTitle }}",
-			RepoWindow:      "repo",
-		},
+		FromIssue:    FromIssue{RepoWindow: "repo"},
+		FromPR:       FromPR{RepoWindow: "repo"},
 		Tmux: TmuxLayout{
 			Windows: []Window{{Name: "repo", Cwd: "."}},
 		},
@@ -264,6 +277,19 @@ func validate(cfg *Config) error {
 			if !found {
 				return fmt.Errorf("workspace %q: from_issue.repo_window %q does not match any tmux window",
 					name, w.FromIssue.RepoWindow)
+			}
+		}
+		if w.FromPR.RepoWindow != "" {
+			found := false
+			for _, win := range w.Tmux.Windows {
+				if win.Name == w.FromPR.RepoWindow {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("workspace %q: from_pr.repo_window %q does not match any tmux window",
+					name, w.FromPR.RepoWindow)
 			}
 		}
 	}

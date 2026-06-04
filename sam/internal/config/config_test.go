@@ -202,6 +202,60 @@ cwd  = "deployment/uat"
 	}
 }
 
+func TestLoad_FromPRReadsConfig(t *testing.T) {
+	// No [from_pr] → nothing injected; the flow simply won't launch Claude.
+	path := writeConfig(t, fullAndbegin)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	w := cfg.Workspaces["andbegin"]
+	if w.FromPR.ClaudePrompt != "" || w.FromPR.RepoWindow != "" {
+		t.Errorf("from_pr should be empty when unconfigured; got %+v", w.FromPR)
+	}
+
+	// An explicit [from_pr] is read verbatim.
+	body := fullAndbegin + `
+[workspaces.andbegin.from_pr]
+claude_prompt     = "/review only"
+claude_pane_title = "RV {{ .PRTitle }}"
+repo_window       = "uat"
+`
+	path = writeConfig(t, body)
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load explicit from_pr: %v", err)
+	}
+	w = cfg.Workspaces["andbegin"]
+	if w.FromPR.ClaudePrompt != "/review only" || w.FromPR.RepoWindow != "uat" {
+		t.Errorf("explicit from_pr not honored: %+v", w.FromPR)
+	}
+}
+
+func TestLoad_FromPRRepoWindowMismatch(t *testing.T) {
+	body := `
+[workspaces.andbegin]
+repo        = "/x"
+worktrees   = "/y"
+main_branch = "main"
+
+[workspaces.andbegin.from_pr]
+repo_window = "nope"
+
+[[workspaces.andbegin.tmux.windows]]
+name = "repo"
+cwd  = "."
+`
+	path := writeConfig(t, body)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for from_pr.repo_window mismatch")
+	}
+	if !strings.Contains(err.Error(), "from_pr.repo_window") || !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error should mention field and value: %v", err)
+	}
+}
+
 func TestResolve_ExplicitFlag(t *testing.T) {
 	body := `
 [workspaces.andbegin]

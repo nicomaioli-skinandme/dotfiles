@@ -11,8 +11,8 @@ It is deliberately narrow:
 - **Not** feature or implementation documentation. Config keys, Go
   types, env var names, and flow walk-throughs live in the code, the
   config, and the README — not here, where they would drift out of sync.
-- **Not** eager. An entity sam doesn't actually use (pull requests,
-  labels, milestones, GitHub organizations) gets no entry.
+- **Not** eager. An entity sam doesn't actually use (labels, milestones,
+  GitHub organizations) gets no entry.
 
 Two annotations appear on entries:
 
@@ -35,6 +35,10 @@ Two annotations appear on entries:
 ## GitHub
 
 - **issue** — a GitHub issue.
+- **pull request** — a GitHub pull request. *Alias:* PR. sam surfaces the
+  open PRs in a workspace's repo that request you as a reviewer via the
+  **prs** view; selecting one creates a **worktree** on the PR's head
+  branch for review.
 - **project** — ***reserved***. "Project" means a
   [GitHub Project (v2)](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
   board. Never reuse the bare word for a sam concept; always write

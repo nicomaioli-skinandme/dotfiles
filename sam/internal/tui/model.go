@@ -9,6 +9,7 @@ import (
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
 )
 
 // inputMode is what the top bar is doing: nothing (keys drive the list),
@@ -40,6 +41,7 @@ type model struct {
 	selected map[string]bool // multi-select set, keyed by Item.ID
 
 	issues  map[string]issueflow.Issue // resolved issues by Item.ID (ResIssues)
+	prs     map[string]prflow.PR       // resolved PRs by Item.ID (ResPRs)
 	pending *fromIssueState            // in-flight from-issue flow, if any
 
 	mode  inputMode
@@ -120,6 +122,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fromIssueDoneMsg:
 		return m.handleFromIssueDone(msg)
+
+	case fromPRDoneMsg:
+		return m.handleFromPRDone(msg)
 	}
 	return m, nil
 }

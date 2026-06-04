@@ -114,6 +114,86 @@ func IssueView(repo string, num int) (Issue, error) {
 	return raw.toIssue(repo), nil
 }
 
+// PR is a lightweight view of a GitHub pull request sourced from
+// `gh pr list/view`. Like Issue, Repository is populated by the caller
+// from the request, since a single-repo `--json` query omits it.
+type PR struct {
+	Number      int
+	Title       string
+	Repository  string
+	HeadRefName string
+	Author      string
+	IsDraft     bool
+}
+
+type ghPRRaw struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
+	HeadRefName string `json:"headRefName"`
+	IsDraft     bool   `json:"isDraft"`
+	Author      struct {
+		Login string `json:"login"`
+	} `json:"author"`
+}
+
+func (r ghPRRaw) toPR(repo string) PR {
+	return PR{
+		Number:      r.Number,
+		Title:       r.Title,
+		Repository:  repo,
+		HeadRefName: r.HeadRefName,
+		Author:      r.Author.Login,
+		IsDraft:     r.IsDraft,
+	}
+}
+
+const prJSONFields = "number,title,headRefName,author,isDraft"
+
+// PRsForReview returns the open PRs in repo that request the current gh
+// user as a reviewer (`review-requested:@me`), via `gh pr list`. Using
+// @me avoids a separate CurrentUser round-trip — the PR review flow
+// never needs the login otherwise.
+func PRsForReview(repo string) ([]PR, error) {
+	out, err := run(
+		"pr", "list",
+		"--repo", repo,
+		"--search", "review-requested:@me",
+		"--state", "open",
+		"--json", prJSONFields,
+		"--limit", "200",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var raw []ghPRRaw
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		return nil, fmt.Errorf("parse gh pr list output: %w", err)
+	}
+	prs := make([]PR, len(raw))
+	for i, r := range raw {
+		prs[i] = r.toPR(repo)
+	}
+	return prs, nil
+}
+
+// PRView fetches a single PR via `gh pr view`. Returns an error when the
+// PR doesn't exist.
+func PRView(repo string, num int) (PR, error) {
+	out, err := run(
+		"pr", "view", strconv.Itoa(num),
+		"--repo", repo,
+		"--json", prJSONFields,
+	)
+	if err != nil {
+		return PR{}, err
+	}
+	var raw ghPRRaw
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		return PR{}, fmt.Errorf("parse gh pr view output: %w", err)
+	}
+	return raw.toPR(repo), nil
+}
+
 // ProjectItems returns every item on the configured project. Filtering
 // by repo or status happens in the caller.
 func ProjectItems(cfg config.GhProject) ([]ProjectItem, error) {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/proc"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 )
@@ -20,6 +21,7 @@ type itemsLoadedMsg struct {
 	branchPick bool
 	items      []Item
 	issues     map[string]issueflow.Issue // resolved issues, keyed by Item.ID (ResIssues only)
+	prs        map[string]prflow.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
 	status     string                     // non-fatal note shown in the status line (e.g. "no issues")
 	err        error
 }
@@ -36,6 +38,9 @@ func (m *model) loadResource() tea.Cmd {
 	case ResIssues:
 		m.loading = true
 		return tea.Batch(m.spinner.Tick, m.loadIssues())
+	case ResPRs:
+		m.loading = true
+		return tea.Batch(m.spinner.Tick, m.loadPRs())
 	case ResClankers:
 		m.loading = true
 		return tea.Batch(m.spinner.Tick, m.loadClankers())
@@ -55,7 +60,7 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 		// (switch to another resource, quit) rather than aborting. The error
 		// is kept generic on purpose — raw gh/git output is multiline and
 		// would overflow the status bar; richer error surfacing comes later.
-		if m.resource == ResIssues {
+		if m.resource == ResIssues || m.resource == ResPRs {
 			m.status = "gh errored"
 		} else {
 			m.status = "couldn't load " + m.resource.Name()
@@ -65,6 +70,7 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 		m.items = msg.items
 	}
 	m.issues = msg.issues
+	m.prs = msg.prs
 	m.cursor = 0
 	m.applyFilter()
 }
@@ -145,6 +151,36 @@ func (m *model) loadIssues() tea.Cmd {
 	}
 }
 
+func (m *model) loadPRs() tea.Cmd {
+	ws := m.workspace
+	return func() tea.Msg {
+		prs, err := prflow.List(ws)
+		if err != nil {
+			return itemsLoadedMsg{resource: ResPRs, err: err}
+		}
+		items := make([]Item, 0, len(prs))
+		byID := make(map[string]prflow.PR, len(prs))
+		for _, pr := range prs {
+			id := fmt.Sprintf("%s#%d", pr.Repository, pr.Number)
+			detail := pr.Author
+			if pr.IsDraft {
+				detail += " · draft"
+			}
+			items = append(items, Item{
+				ID:     id,
+				Title:  fmt.Sprintf("#%d  %s", pr.Number, pr.Title),
+				Detail: detail,
+			})
+			byID[id] = pr
+		}
+		status := ""
+		if len(items) == 0 {
+			status = "no PRs awaiting your review in " + ws.BranchRepo
+		}
+		return itemsLoadedMsg{resource: ResPRs, items: items, prs: byID, status: status}
+	}
+}
+
 func (m *model) loadClankers() tea.Cmd {
 	return func() tea.Msg {
 		claudes, err := proc.Claudes()
@@ -177,10 +213,17 @@ func (m *model) loadClankers() tea.Cmd {
 
 // loadBranches builds the branch-pick list for `a` on the worktrees
 // view: branches by recency, excluding the main branch and any branch
-// that already has a worktree.
+// that already has a worktree. It fetches first so branches that exist
+// only on the remote (a teammate's just-pushed branch, common when
+// checking out for review) gain an origin/<branch> ref and show up. A
+// fetch failure is non-fatal — offline, we still list cached branches.
 func (m *model) loadBranches() tea.Cmd {
 	ws := m.workspace
 	return func() tea.Msg {
+		fetchNote := ""
+		if err := gitx.Fetch(ws.Repo); err != nil {
+			fetchNote = "fetch failed; showing cached branches"
+		}
 		all, err := gitx.BranchesByRecency(ws.Repo)
 		if err != nil {
 			return itemsLoadedMsg{branchPick: true, err: err}
@@ -200,8 +243,8 @@ func (m *model) loadBranches() tea.Cmd {
 			}
 			items = append(items, Item{ID: b, Title: b})
 		}
-		status := ""
-		if len(items) == 0 {
+		status := fetchNote
+		if len(items) == 0 && status == "" {
 			status = "no branches available for a new worktree"
 		}
 		return itemsLoadedMsg{branchPick: true, items: items, status: status}

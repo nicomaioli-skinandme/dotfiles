@@ -96,23 +96,31 @@ func BuildSession(name string, workspace *config.Workspace, baseDir string) erro
 	return nil
 }
 
-// AddClaudePane splits workspace.FromIssue.RepoWindow vertically and runs
-// `claude -n <title> <prompt>` (or `claude <prompt>` when title is
-// empty) in the new pane. The pane is created in cwd so Claude starts in
-// the worktree rather than tmux's default directory.
-func AddClaudePane(session string, workspace *config.Workspace, data ClaudeData, cwd string) error {
-	if workspace.FromIssue.RepoWindow == "" {
-		return fmt.Errorf("from_issue.repo_window is not configured")
+// AddClaudePane splits repoWindow vertically and runs `claude -n <title>
+// <prompt>` (or `claude <prompt>` when title is empty) in the new pane.
+// The pane is created in cwd so Claude starts in the worktree rather than
+// tmux's default directory. The window/prompt/title come from the caller's
+// flow config (from_issue or from_pr).
+//
+// An empty promptTmpl means "no Claude pane": AddClaudePane is a no-op
+// (the caller has already built the session's tmux layout), so a flow
+// with no configured prompt simply doesn't launch Claude.
+func AddClaudePane(session, repoWindow, promptTmpl, titleTmpl string, data ClaudeData, cwd string) error {
+	if promptTmpl == "" {
+		return nil
 	}
-	prompt, err := RenderPrompt(workspace.FromIssue.ClaudePrompt, data)
+	if repoWindow == "" {
+		return fmt.Errorf("repo_window is not configured")
+	}
+	prompt, err := RenderPrompt(promptTmpl, data)
 	if err != nil {
 		return err
 	}
-	title, err := RenderPaneTitle(workspace.FromIssue.ClaudePaneTitle, data)
+	title, err := RenderPaneTitle(titleTmpl, data)
 	if err != nil {
 		return err
 	}
-	target := session + ":" + workspace.FromIssue.RepoWindow
+	target := session + ":" + repoWindow
 	pane, err := tmux("split-window", "-v", "-t", target, "-c", cwd, "-P", "-F", "#{pane_id}")
 	if err != nil {
 		return err

@@ -42,6 +42,7 @@ func main() {
 	root.AddCommand(newNewWorktreeCmd())
 	root.AddCommand(newDeleteCmd())
 	root.AddCommand(newFromIssueCmd())
+	root.AddCommand(newFromPRCmd())
 	root.AddCommand(newMenuCmd())
 	root.AddCommand(newWorkspaceCmd())
 	root.AddCommand(&cobra.Command{
