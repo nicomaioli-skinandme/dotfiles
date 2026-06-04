@@ -104,8 +104,9 @@ func BuildSession(name string, workspace *config.Workspace, baseDir string) erro
 //
 // An empty promptTmpl means "no Claude pane": AddClaudePane is a no-op
 // (the caller has already built the session's tmux layout), so a flow
-// with no configured prompt simply doesn't launch Claude.
-func AddClaudePane(session, repoWindow, promptTmpl, titleTmpl string, data ClaudeData, cwd string) error {
+// with no configured prompt simply doesn't launch Claude. permissionMode,
+// when non-empty, is passed through as `claude --permission-mode <mode>`.
+func AddClaudePane(session, repoWindow, promptTmpl, titleTmpl, permissionMode string, data ClaudeData, cwd string) error {
 	if promptTmpl == "" {
 		return nil
 	}
@@ -127,16 +128,25 @@ func AddClaudePane(session, repoWindow, promptTmpl, titleTmpl string, data Claud
 	}
 	pane = strings.TrimSpace(pane)
 
-	var cmd string
-	if title != "" {
-		cmd = fmt.Sprintf("claude -n %s %s", shellQuote(title), shellQuote(prompt))
-	} else {
-		cmd = fmt.Sprintf("claude %s", shellQuote(prompt))
-	}
-	if _, err := tmux("send-keys", "-t", pane, cmd, "C-m"); err != nil {
+	if _, err := tmux("send-keys", "-t", pane, claudeCommand(permissionMode, title, prompt), "C-m"); err != nil {
 		return err
 	}
 	return nil
+}
+
+// claudeCommand builds the shell command run in the Claude pane. An empty
+// permissionMode or title omits the corresponding flag. All inputs are
+// shell-quoted; the caller has already rendered any templates.
+func claudeCommand(permissionMode, title, prompt string) string {
+	parts := []string{"claude"}
+	if permissionMode != "" {
+		parts = append(parts, "--permission-mode", shellQuote(permissionMode))
+	}
+	if title != "" {
+		parts = append(parts, "-n", shellQuote(title))
+	}
+	parts = append(parts, shellQuote(prompt))
+	return strings.Join(parts, " ")
 }
 
 // shellQuote wraps s in single quotes and escapes any internal

@@ -207,7 +207,7 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 			IssueRepo:   issueRepo,
 			IssueURL:    fmt.Sprintf("https://github.com/%s/issues/%d", issueRepo, issueNum),
 		}
-		if err := tmuxx.AddClaudePane(session, ws.FromIssue.RepoWindow, ws.FromIssue.ClaudePrompt, ws.FromIssue.ClaudePaneTitle, data, path); err != nil {
+		if err := tmuxx.AddClaudePane(session, ws.FromIssue.RepoWindow, ws.FromIssue.ClaudePrompt, ws.FromIssue.ClaudePaneTitle, "", data, path); err != nil {
 			return "", err
 		}
 	}

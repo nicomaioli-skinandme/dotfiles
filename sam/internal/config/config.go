@@ -68,11 +68,14 @@ type FromIssue struct {
 
 // FromPR mirrors FromIssue for the `prs` review flow: the Claude pane
 // opened in a PR-review worktree. Same rule — an empty ClaudePrompt means
-// no pane is launched.
+// no pane is launched. PermissionMode, when set, is passed to claude as
+// `--permission-mode <mode>` (e.g. "auto"); empty means the flag is
+// omitted and claude starts in its usual mode.
 type FromPR struct {
 	ClaudePrompt    string `mapstructure:"claude_prompt" toml:"claude_prompt,omitempty"`
 	ClaudePaneTitle string `mapstructure:"claude_pane_title" toml:"claude_pane_title,omitempty"`
 	RepoWindow      string `mapstructure:"repo_window" toml:"repo_window,omitempty"`
+	PermissionMode  string `mapstructure:"permission_mode" toml:"permission_mode,omitempty"`
 }
 
 type TmuxLayout struct {

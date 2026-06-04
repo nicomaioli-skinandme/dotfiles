@@ -85,7 +85,7 @@ func Apply(ws *config.Workspace, workspaceName string, pr PR) (string, error) {
 			PRAuthor: pr.Author,
 			PRBranch: branch,
 		}
-		if err := tmuxx.AddClaudePane(session, ws.FromPR.RepoWindow, ws.FromPR.ClaudePrompt, ws.FromPR.ClaudePaneTitle, data, path); err != nil {
+		if err := tmuxx.AddClaudePane(session, ws.FromPR.RepoWindow, ws.FromPR.ClaudePrompt, ws.FromPR.ClaudePaneTitle, ws.FromPR.PermissionMode, data, path); err != nil {
 			return "", err
 		}
 	}

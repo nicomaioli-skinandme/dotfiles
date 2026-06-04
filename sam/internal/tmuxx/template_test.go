@@ -75,11 +75,11 @@ func TestRender_UnknownFieldErrors(t *testing.T) {
 // calls, no error) — the flow launches no Claude pane. This returns before
 // any tmux subprocess, so it's safe without a running server.
 func TestAddClaudePane_NoPromptSkips(t *testing.T) {
-	if err := AddClaudePane("session", "repo", "", "", ClaudeData{}, "/tmp"); err != nil {
+	if err := AddClaudePane("session", "repo", "", "", "", ClaudeData{}, "/tmp"); err != nil {
 		t.Errorf("empty prompt should no-op, got %v", err)
 	}
 	// Empty prompt skips even when repo_window is also unset.
-	if err := AddClaudePane("session", "", "", "", ClaudeData{}, "/tmp"); err != nil {
+	if err := AddClaudePane("session", "", "", "", "", ClaudeData{}, "/tmp"); err != nil {
 		t.Errorf("empty prompt/window should no-op, got %v", err)
 	}
 }
