@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"unicode/utf8"
-
 	"charm.land/lipgloss/v2"
 
 	"github.com/sahilm/fuzzy"
@@ -16,24 +14,14 @@ import (
 // popup; use newAutocomplete to seed maxVisible.
 type autocomplete struct {
 	open       bool
-	candidates []string  // caller-supplied pool
-	query      string    // current fuzzy filter (typed text only)
-	matches    []acMatch // recomputed from candidates+query, ranked by fuzzy score
-	cursor     int       // index into matches
-	maxVisible int       // hard cap on rendered rows
+	candidates []string // caller-supplied pool
+	query      string   // current fuzzy filter (typed text only)
+	matches    []string // recomputed from candidates+query, ranked by fuzzy score
+	cursor     int      // index into matches
+	maxVisible int      // hard cap on rendered rows
 
-	match    lipgloss.Style // fuzzy-matched runes
 	selected lipgloss.Style // the cursor row
 	border   lipgloss.Style // popup frame
-}
-
-// acMatch is one surviving candidate plus the byte offsets of the runes
-// that matched the query, so View can highlight them. indices are byte
-// offsets into value (sahilm/fuzzy reports byte positions), which lets the
-// rune-walk in highlight stay correct for multi-byte strings.
-type acMatch struct {
-	value   string
-	indices []int
 }
 
 const defaultAutocompleteMax = 5
@@ -48,7 +36,6 @@ func newAutocomplete(max int, st styles) autocomplete {
 	}
 	return autocomplete{
 		maxVisible: max,
-		match:      st.acMatch,
 		selected:   st.acSelected,
 		border:     st.acBorder,
 	}
@@ -78,19 +65,17 @@ func (a *autocomplete) SetQuery(q string) {
 }
 
 // recompute rebuilds matches from candidates and the current query. An
-// empty query shows the full pool in its given order (no highlight);
-// otherwise fuzzy.Find ranks by relevance score, best first.
+// empty query shows the full pool in its given order; otherwise fuzzy.Find
+// ranks the subsequence matches by relevance score, best first.
 func (a *autocomplete) recompute() {
 	if a.query == "" {
-		a.matches = make([]acMatch, len(a.candidates))
-		for i, c := range a.candidates {
-			a.matches[i] = acMatch{value: c}
-		}
+		a.matches = make([]string, len(a.candidates))
+		copy(a.matches, a.candidates)
 	} else {
 		found := fuzzy.Find(a.query, a.candidates)
-		a.matches = make([]acMatch, len(found))
+		a.matches = make([]string, len(found))
 		for i, m := range found {
-			a.matches[i] = acMatch{value: m.Str, indices: m.MatchedIndexes}
+			a.matches[i] = m.Str
 		}
 	}
 	a.clampCursor()
@@ -128,7 +113,7 @@ func (a *autocomplete) Selected() (string, bool) {
 	if a.cursor < 0 || a.cursor >= len(a.matches) {
 		return "", false
 	}
-	return a.matches[a.cursor].value, true
+	return a.matches[a.cursor], true
 }
 
 // Visible reports whether the popup should be drawn: open with at least
@@ -146,9 +131,8 @@ type anchorPos struct {
 
 // View renders the bordered popup content (no positioning). At most
 // maxVisible rows are shown via a scroll window around the cursor; the
-// highlighted row is reversed and matched characters are accented. Rows
-// are clamped to maxWidth display columns so a long entry never produces a
-// popup wider than the screen.
+// selected row is reverse-highlighted. Rows are clamped to maxWidth display
+// columns so a long entry never produces a popup wider than the screen.
 func (a *autocomplete) View(maxWidth int) string {
 	if !a.Visible() {
 		return ""
@@ -164,7 +148,7 @@ func (a *autocomplete) View(maxWidth int) string {
 	start, end := a.window()
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		line := highlight(a.matches[i].value, a.matches[i].indices, a.match)
+		line := a.matches[i]
 		if i == a.cursor {
 			line = a.selected.Render(line)
 		}
@@ -225,31 +209,4 @@ func (a *autocomplete) Position(anchor anchorPos, popupW, popupH, screenW, scree
 		}
 	}
 	return x, y
-}
-
-// highlight renders s with the runes at the given byte offsets styled.
-// indices are byte offsets (as reported by sahilm/fuzzy); walking s by
-// rune while tracking the byte offset keeps the highlight correct for
-// multi-byte strings.
-func highlight(s string, indices []int, style lipgloss.Style) string {
-	if len(indices) == 0 {
-		return s
-	}
-	mark := make(map[int]bool, len(indices))
-	for _, i := range indices {
-		mark[i] = true
-	}
-
-	var b []byte
-	for off := 0; off < len(s); {
-		_, size := utf8.DecodeRuneInString(s[off:])
-		seg := s[off : off+size]
-		if mark[off] {
-			b = append(b, style.Render(seg)...)
-		} else {
-			b = append(b, seg...)
-		}
-		off += size
-	}
-	return string(b)
 }

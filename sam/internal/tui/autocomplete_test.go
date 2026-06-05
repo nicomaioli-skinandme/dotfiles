@@ -54,17 +54,14 @@ func TestAutocompleteRanking(t *testing.T) {
 	a := newAutocomplete(5, newStyles(config.Colors{}))
 	a.Open([]string{"workspaces", "worktrees", "issues", "clankers", "quit"})
 
-	// Empty query shows the whole pool, in given order, no highlight.
+	// Empty query shows the whole pool, in given order.
 	if len(a.matches) != 5 {
 		t.Fatalf("empty query: got %d matches, want 5", len(a.matches))
-	}
-	if a.matches[0].indices != nil {
-		t.Errorf("empty query should not highlight: %v", a.matches[0].indices)
 	}
 
 	// A fuzzy query keeps only subsequence matches.
 	a.SetQuery("iss")
-	if len(a.matches) != 1 || a.matches[0].value != "issues" {
+	if len(a.matches) != 1 || a.matches[0] != "issues" {
 		t.Fatalf("query iss: got %+v", a.matches)
 	}
 
@@ -161,46 +158,6 @@ func TestAutocompletePosition(t *testing.T) {
 	}
 }
 
-func TestHighlight(t *testing.T) {
-	style := lipgloss.NewStyle().Bold(true)
-
-	// No indices -> string is returned verbatim.
-	if got := highlight("issues", nil, style); got != "issues" {
-		t.Errorf("no indices: got %q", got)
-	}
-
-	// Matched runes are wrapped in escapes; the plain text is preserved
-	// when escapes are stripped, and the result differs from the input.
-	got := highlight("issues", []int{0, 1, 2}, style)
-	if got == "issues" {
-		t.Error("expected matched runes to be styled")
-	}
-	if stripped := stripANSI(got); stripped != "issues" {
-		t.Errorf("stripped highlight: got %q, want issues", stripped)
-	}
-}
-
-// stripANSI removes CSI escape sequences so styled output can be compared
-// against its plain text.
-func stripANSI(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); {
-		if s[i] == 0x1b {
-			// Skip until the terminating letter of the CSI sequence.
-			for i < len(s) && !((s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z')) {
-				i++
-			}
-			if i < len(s) {
-				i++ // skip the terminator
-			}
-			continue
-		}
-		b.WriteByte(s[i])
-		i++
-	}
-	return b.String()
-}
-
 // Wiring: entering command mode opens the popup; typing narrows it; Enter
 // runs the highlighted entry through the unchanged parseCommand flow.
 func TestCommandModeAutocompleteWiring(t *testing.T) {
@@ -215,8 +172,8 @@ func TestCommandModeAutocompleteWiring(t *testing.T) {
 	m.input.SetValue("work")
 	m.ac.SetQuery("work")
 	for _, mt := range m.ac.matches {
-		if !strings.HasPrefix(mt.value, "work") {
-			t.Errorf("unexpected match after query work: %q", mt.value)
+		if !strings.HasPrefix(mt, "work") {
+			t.Errorf("unexpected match after query work: %q", mt)
 		}
 	}
 	if len(m.ac.matches) != 2 {
@@ -244,7 +201,7 @@ func TestHandleInputKeyTypeAndEnter(t *testing.T) {
 	for _, r := range "iss" {
 		m.handleInputKey(runeKey(r))
 	}
-	if len(m.ac.matches) != 1 || m.ac.matches[0].value != "issues" {
+	if len(m.ac.matches) != 1 || m.ac.matches[0] != "issues" {
 		t.Fatalf("after typing iss: got %+v", m.ac.matches)
 	}
 

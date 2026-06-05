@@ -33,7 +33,6 @@ type styles struct {
 	deleting      lipgloss.Style // the "deleting…" row indicator
 
 	// Autocomplete popup styles, copied onto the autocomplete struct.
-	acMatch    lipgloss.Style // fuzzy-matched runes
 	acSelected lipgloss.Style // the cursor row
 	acBorder   lipgloss.Style // popup frame
 }
@@ -76,7 +75,6 @@ func newStyles(c config.Colors) styles {
 		modalActive:  base.Padding(0, 2).Reverse(true).Bold(true),
 		modalDestroy: base.Padding(0, 2).Foreground(destroy).Reverse(true).Bold(true),
 		deleting:     base.Foreground(destroy),
-		acMatch:      base.Foreground(primary).Bold(true),
 		acSelected:   base.Reverse(true),
 		acBorder: base.
 			Border(lipgloss.RoundedBorder()).
