@@ -187,7 +187,7 @@ func Apply(ws *config.Workspace, workspaceName string, issue Issue, me string, r
 	if err := gitx.Fetch(ws.Repo); err != nil {
 		return "", err
 	}
-	if err := gitx.FastForwardMain(ws.Repo, ws.MainBranch); err != nil {
+	if err := gitx.FastForwardTrunk(ws.Repo, ws.Trunk); err != nil {
 		return "", err
 	}
 

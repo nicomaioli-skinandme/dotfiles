@@ -85,14 +85,15 @@ func (m *model) loadWorktrees() tea.Cmd {
 		}
 		items := []Item{
 			{
-				ID:     ws.MainBranch,
-				Title:  ws.MainBranch,
-				Detail: "main repo",
-				Active: tmuxx.HasSession(tmuxx.SessionName(wsName, ws.MainBranch)),
+				ID:     ws.Trunk,
+				Title:  ws.Trunk,
+				Detail: "main worktree",
+				Active: tmuxx.HasSession(tmuxx.SessionName(wsName, ws.Trunk)),
+				Type:   WorktreeMain,
 			},
 		}
 		for _, w := range worktrees {
-			items = append(items, Item{ID: w, Title: w, Active: tmuxx.HasSession(tmuxx.SessionName(wsName, w))})
+			items = append(items, Item{ID: w, Title: w, Active: tmuxx.HasSession(tmuxx.SessionName(wsName, w)), Type: WorktreeLinked})
 		}
 		return itemsLoadedMsg{resource: ResWorktrees, items: items}
 	}
@@ -212,7 +213,7 @@ func (m *model) loadClankers() tea.Cmd {
 }
 
 // loadBranches builds the branch-pick list for `a` on the worktrees
-// view: branches by recency, excluding the main branch and any branch
+// view: branches by recency, excluding the trunk and any branch
 // that already has a worktree. It fetches first so branches that exist
 // only on the remote (a teammate's just-pushed branch, common when
 // checking out for review) gain an origin/<branch> ref and show up. A
@@ -232,7 +233,7 @@ func (m *model) loadBranches() tea.Cmd {
 		if err != nil {
 			return itemsLoadedMsg{branchPick: true, err: err}
 		}
-		exclude := map[string]bool{ws.MainBranch: true}
+		exclude := map[string]bool{ws.Trunk: true}
 		for _, w := range existing {
 			exclude[w] = true
 		}

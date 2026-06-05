@@ -29,7 +29,12 @@ Two annotations appear on entries:
 - **repo** — the git repository a workspace points at. _Alias:_
   repository.
 - **worktree** — a [git worktree](https://git-scm.com/docs/git-worktree):
-  an additional checkout of a repo on its own branch. Not a
+  an additional checkout of a repo on its own branch. A repo has one
+  **main worktree** (the repo-root checkout) and any number of **linked
+  worktrees** (the per-branch checkouts sam creates under a workspace's
+  worktrees dir); sam tags each row in the worktrees view with its
+  _worktree type_, `main` or `linked`. Not interchangeable with a
+  **workspace**.
 
 ## GitHub
 
@@ -54,9 +59,9 @@ Two annotations appear on entries:
 - **workspace** — sam's own container for working on a codebase. The
   classic confusion is with git's **worktree**: a worktree is a checkout
   on disk, a workspace is sam's configuration unit. Not interchangeable.
-- **main branch** vs **main repo** — "main branch" is the git branch sam
-  treats as a workspace's trunk. "Main repo" is the synthetic menu entry
-  for that trunk — the repo root checked out to the main branch — not a
-  real git worktree.
+- **trunk** — the git branch sam treats as a workspace's mainline (e.g.
+  `main`, `master`), configured per workspace. The **main worktree**
+  normally has it checked out; the worktrees view excludes it from the
+  branch picker since it already lives in the main worktree.
 - **clanker** — a running Claude process, often inside a tmux pane.
   Listed by `sam clankers`.

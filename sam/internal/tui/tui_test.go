@@ -38,7 +38,7 @@ func TestParseCommand(t *testing.T) {
 
 // testModel builds a model with a fixed item set for state tests.
 func testModel(items []Item) *model {
-	m := newModel("ws", &config.Workspace{MainBranch: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
 	m.items = items
 	m.applyFilter()
 	return m
@@ -47,7 +47,7 @@ func testModel(items []Item) *model {
 func sampleItems() []Item {
 	return []Item{
 		{ID: "release", Title: "release", Active: true},
-		{ID: "main", Title: "main", Detail: "main repo"},
+		{ID: "main", Title: "main", Detail: "main worktree", Type: WorktreeMain},
 		{ID: "feat-login", Title: "feat-login"},
 		{ID: "fix-crash", Title: "fix-crash", Active: true},
 	}
@@ -67,7 +67,7 @@ func TestApplyFilter(t *testing.T) {
 	}
 
 	// Detail is searched too.
-	m.query = "main repo"
+	m.query = "main worktree"
 	m.applyFilter()
 	if len(m.filtered) != 1 || m.filtered[0].ID != "main" {
 		t.Fatalf("detail match: got %+v", m.filtered)
@@ -252,9 +252,9 @@ func TestFromIssuePreparedPromptsReassign(t *testing.T) {
 }
 
 func TestActivateWorktreeBuildsResult(t *testing.T) {
-	ws := &config.Workspace{MainBranch: "main", Repo: "/repo", Worktrees: "/wt"}
+	ws := &config.Workspace{Trunk: "main", Repo: "/repo", Worktrees: "/wt"}
 	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{})
-	m.items = []Item{{ID: "feat-x", Title: "feat-x"}}
+	m.items = []Item{{ID: "feat-x", Title: "feat-x", Type: WorktreeLinked}}
 	m.applyFilter()
 
 	m.activate()
@@ -275,8 +275,8 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 	// Use unique branch names so tmux session lookups in the test
 	// environment can't match a real session and skew the build-spec
 	// branch in activateWorktree.
-	wsA := config.Workspace{MainBranch: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
-	wsB := config.Workspace{MainBranch: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
+	wsA := config.Workspace{Trunk: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
+	wsB := config.Workspace{Trunk: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
 	all := map[string]config.Workspace{"a": wsA, "b": wsB}
 	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{})
 
@@ -288,8 +288,8 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 		t.Fatalf("after switch: name=%q repo=%q", m.workspaceName, m.workspace.Repo)
 	}
 
-	// Now pick the main-repo entry for the *switched-to* workspace.
-	m.items = []Item{{ID: wsB.MainBranch, Title: wsB.MainBranch}}
+	// Now pick the main worktree entry for the *switched-to* workspace.
+	m.items = []Item{{ID: wsB.Trunk, Title: wsB.Trunk, Type: WorktreeMain}}
 	m.applyFilter()
 	m.activate()
 
@@ -304,14 +304,14 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 	}
 }
 
-func TestDeleteGuardsMainRepo(t *testing.T) {
-	m := newModel("ws", &config.Workspace{MainBranch: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{})
-	m.items = []Item{{ID: "main", Title: "main"}}
+func TestDeleteGuardsMainWorktree(t *testing.T) {
+	m := newModel("ws", &config.Workspace{Trunk: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{})
+	m.items = []Item{{ID: "main", Title: "main", Type: WorktreeMain}}
 	m.applyFilter()
 
 	m.cursor = 0
 	m.del()
 	if m.modal.kind != modalNone {
-		t.Error("delete on main repo should not open a modal")
+		t.Error("delete on main worktree should not open a modal")
 	}
 }

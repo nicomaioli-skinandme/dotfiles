@@ -100,17 +100,17 @@ func Run(existing *config.Config) (*config.Config, error) {
 		return nil, err
 	}
 
-	// 4. Main branch.
+	// 4. Trunk.
 	detected, _ := gitx.DefaultBranch(repo)
 	if detected == "" {
 		detected = "main"
 	}
-	mainBranch, err := ui.Input("Main branch", "detected from origin/HEAD", detected)
+	trunk, err := ui.Input("Trunk", "detected from origin/HEAD", detected)
 	if err != nil {
 		return nil, err
 	}
-	if mainBranch == "" {
-		return nil, errors.New("main branch cannot be empty")
+	if trunk == "" {
+		return nil, errors.New("trunk cannot be empty")
 	}
 
 	// 5. branch_repo (owner/name on GitHub).
@@ -167,7 +167,7 @@ func Run(existing *config.Config) (*config.Config, error) {
 	ws := config.Default()
 	ws.Repo = repo
 	ws.Worktrees = worktrees
-	ws.MainBranch = mainBranch
+	ws.Trunk = trunk
 	ws.BranchRepo = branchRepo
 	ws.GhProject = ghProj
 	ws.WorktreeSetup = worktreeSetup

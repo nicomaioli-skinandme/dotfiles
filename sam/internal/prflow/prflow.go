@@ -52,7 +52,7 @@ func ByFlag(ws *config.Workspace, num int, repo string) (PR, error) {
 
 // Apply bootstraps the review worktree for a PR and returns the tmux
 // session name to attach to. It fetches so the PR's head branch is
-// locally reachable, fast-forwards main, creates the worktree on the
+// locally reachable, fast-forwards the trunk, creates the worktree on the
 // head branch, builds the tmux session, and adds the Claude review pane —
 // idempotently. It makes no changes on GitHub.
 func Apply(ws *config.Workspace, workspaceName string, pr PR) (string, error) {
@@ -63,7 +63,7 @@ func Apply(ws *config.Workspace, workspaceName string, pr PR) (string, error) {
 	if err := gitx.Fetch(ws.Repo); err != nil {
 		return "", err
 	}
-	if err := gitx.FastForwardMain(ws.Repo, ws.MainBranch); err != nil {
+	if err := gitx.FastForwardTrunk(ws.Repo, ws.Trunk); err != nil {
 		return "", err
 	}
 
