@@ -51,7 +51,7 @@ func sortedAsc(s []string) bool {
 }
 
 func TestAutocompleteRanking(t *testing.T) {
-	a := newAutocomplete(5)
+	a := newAutocomplete(5, newStyles(config.Colors{}))
 	a.Open([]string{"workspaces", "worktrees", "issues", "clankers", "quit"})
 
 	// Empty query shows the whole pool, in given order, no highlight.
@@ -86,7 +86,7 @@ func TestAutocompleteRanking(t *testing.T) {
 }
 
 func TestAutocompleteMaxVisibleCap(t *testing.T) {
-	a := newAutocomplete(3)
+	a := newAutocomplete(3, newStyles(config.Colors{}))
 	pool := []string{"aa", "ab", "ac", "ad", "ae", "af"}
 	a.Open(pool) // empty query -> all 6 match
 
@@ -115,7 +115,7 @@ func contentRows(s string) int {
 }
 
 func TestAutocompleteMoveAndCycle(t *testing.T) {
-	a := newAutocomplete(5)
+	a := newAutocomplete(5, newStyles(config.Colors{}))
 	a.Open([]string{"a", "b", "c"})
 
 	// Move clamps at the ends.
@@ -140,7 +140,7 @@ func TestAutocompleteMoveAndCycle(t *testing.T) {
 }
 
 func TestAutocompletePosition(t *testing.T) {
-	a := newAutocomplete(5)
+	a := newAutocomplete(5, newStyles(config.Colors{}))
 	cases := []struct {
 		name                 string
 		anchorRow, anchorCol int

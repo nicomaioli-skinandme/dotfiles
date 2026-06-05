@@ -21,6 +21,10 @@ type autocomplete struct {
 	matches    []acMatch // recomputed from candidates+query, ranked by fuzzy score
 	cursor     int       // index into matches
 	maxVisible int       // hard cap on rendered rows
+
+	match    lipgloss.Style // fuzzy-matched runes
+	selected lipgloss.Style // the cursor row
+	border   lipgloss.Style // popup frame
 }
 
 // acMatch is one surviving candidate plus the byte offsets of the runes
@@ -36,11 +40,18 @@ const defaultAutocompleteMax = 5
 
 // newAutocomplete returns a closed popup. max <= 0 falls back to the
 // default so callers (and tests) can pass an unset config value safely.
-func newAutocomplete(max int) autocomplete {
+// The popup renders with the supplied palette styles (zero styles render
+// plain, which is fine for tests).
+func newAutocomplete(max int, st styles) autocomplete {
 	if max <= 0 {
 		max = defaultAutocompleteMax
 	}
-	return autocomplete{maxVisible: max}
+	return autocomplete{
+		maxVisible: max,
+		match:      st.acMatch,
+		selected:   st.acSelected,
+		border:     st.acBorder,
+	}
 }
 
 // Open shows the popup over the given candidate pool with an empty query
@@ -153,15 +164,15 @@ func (a *autocomplete) View(maxWidth int) string {
 	start, end := a.window()
 	lines := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
-		line := highlight(a.matches[i].value, a.matches[i].indices, acMatchStyle)
+		line := highlight(a.matches[i].value, a.matches[i].indices, a.match)
 		if i == a.cursor {
-			line = acSelectedStyle.Render(line)
+			line = a.selected.Render(line)
 		}
 		lines = append(lines, truncate(line, rowWidth))
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return autocompleteBorder.Render(body)
+	return a.border.Render(body)
 }
 
 // window returns the [start,end) slice of matches to render, a scroll
