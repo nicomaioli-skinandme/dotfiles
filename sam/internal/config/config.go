@@ -3,11 +3,9 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -93,19 +91,6 @@ type Pane struct {
 	Cwd   string `mapstructure:"cwd" toml:"cwd"`
 }
 
-// ErrInsideRepo is returned by Resolve when cwd is a descendant of a
-// workspace's repo (but not the repo root) and no other resolution
-// mechanism applied. The caller surfaces a guidance message and exits.
-type ErrInsideRepo struct {
-	Workspace string
-	Repo      string
-}
-
-func (e *ErrInsideRepo) Error() string {
-	return fmt.Sprintf("invoked inside %s repo (%s); cd to the repo root or a worktree",
-		e.Workspace, e.Repo)
-}
-
 // DefaultPath returns the default config location: $HOME/.config/sam/config.toml.
 func DefaultPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -141,74 +126,6 @@ func Load(path string) (*Config, error) {
 		cfg.Tui.Autocomplete.Max = DefaultAutocompleteMax
 	}
 	return &cfg, nil
-}
-
-// Resolve picks which workspace to use given an optional explicit name
-// (from --workspace) and the caller's cwd. Resolution order:
-//  1. explicit
-//  2. cwd matches a workspace's repo or sits inside its worktrees dir
-//  3. cwd is inside a workspace's repo (but not at root) → ErrInsideRepo
-//  4. single-workspace shortcut
-//
-// When none of the above apply, Resolve returns ("", nil, nil) — a
-// success result meaning "no workspace selected; the caller should
-// prompt." The interactive menu treats this as "open the
-// workspace-select view"; non-interactive commands surface their own
-// error pointing the user at --workspace.
-func Resolve(cfg *Config, explicit, cwd string) (string, *Workspace, error) {
-	if explicit != "" {
-		w, ok := cfg.Workspaces[explicit]
-		if !ok {
-			return "", nil, fmt.Errorf("workspace %q not found in config (have: %s)",
-				explicit, workspaceNames(cfg))
-		}
-		return explicit, &w, nil
-	}
-
-	if cwd != "" {
-		cwd = filepath.Clean(cwd)
-		// Pass 1: exact repo match or descendant of worktrees.
-		for name, w := range cfg.Workspaces {
-			repo := filepath.Clean(w.Repo)
-			wt := filepath.Clean(w.Worktrees)
-			if cwd == repo {
-				return name, &w, nil
-			}
-			if isDescendant(cwd, wt) {
-				return name, &w, nil
-			}
-		}
-		// Pass 2: descendant of repo (but not at root) → guidance error.
-		for name, w := range cfg.Workspaces {
-			repo := filepath.Clean(w.Repo)
-			if isDescendant(cwd, repo) {
-				return "", nil, &ErrInsideRepo{Workspace: name, Repo: repo}
-			}
-		}
-	}
-
-	if len(cfg.Workspaces) == 1 {
-		for name, w := range cfg.Workspaces {
-			return name, &w, nil
-		}
-	}
-	return "", nil, nil
-}
-
-// IsInsideRepo reports whether err is the in-repo-subdir guidance error.
-func IsInsideRepo(err error) bool {
-	var e *ErrInsideRepo
-	return errors.As(err, &e)
-}
-
-// isDescendant reports whether child is a strict descendant of parent.
-// Both arguments are expected to be Clean'd absolute paths.
-func isDescendant(child, parent string) bool {
-	if parent == "" || child == parent {
-		return false
-	}
-	sep := string(os.PathSeparator)
-	return strings.HasPrefix(child, parent+sep)
 }
 
 // Default returns a Workspace with sensible defaults for the fields the
@@ -297,13 +214,4 @@ func validate(cfg *Config) error {
 		}
 	}
 	return nil
-}
-
-func workspaceNames(cfg *Config) string {
-	names := make([]string, 0, len(cfg.Workspaces))
-	for n := range cfg.Workspaces {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return strings.Join(names, ", ")
 }

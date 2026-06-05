@@ -6,11 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/proc"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
 
 // itemsLoadedMsg carries the result of loading a resource's rows. It
@@ -20,9 +18,9 @@ type itemsLoadedMsg struct {
 	resource   Resource
 	branchPick bool
 	items      []Item
-	issues     map[string]issueflow.Issue // resolved issues, keyed by Item.ID (ResIssues only)
-	prs        map[string]prflow.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
-	status     string                     // non-fatal note shown in the status line (e.g. "no issues")
+	issues     map[string]issue.Issue // resolved issues, keyed by Item.ID (ResIssues only)
+	prs        map[string]pr.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
+	status     string                 // non-fatal note shown in the status line (e.g. "no issues")
 	err        error
 }
 
@@ -78,22 +76,19 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 func (m *model) loadWorktrees() tea.Cmd {
 	ws := m.workspace
 	wsName := m.workspaceName
+	ctrl := m.deps.Worktrees
 	return func() tea.Msg {
-		worktrees, err := gitx.Worktrees(ws.Worktrees)
+		wts, err := ctrl.List(ws, wsName)
 		if err != nil {
 			return itemsLoadedMsg{resource: ResWorktrees, err: err}
 		}
-		items := []Item{
-			{
-				ID:     ws.Trunk,
-				Title:  ws.Trunk,
-				Detail: "main worktree",
-				Active: tmuxx.HasSession(tmuxx.SessionName(wsName, ws.Trunk)),
-				Type:   WorktreeMain,
-			},
-		}
-		for _, w := range worktrees {
-			items = append(items, Item{ID: w, Title: w, Active: tmuxx.HasSession(tmuxx.SessionName(wsName, w)), Type: WorktreeLinked})
+		items := make([]Item, 0, len(wts))
+		for _, w := range wts {
+			it := Item{ID: w.Name, Title: w.Name, Active: w.SessionActive, Type: worktreeType(w.Type)}
+			if w.Type == worktree.Main {
+				it.Detail = "main worktree"
+			}
+			items = append(items, it)
 		}
 		return itemsLoadedMsg{resource: ResWorktrees, items: items}
 	}
@@ -124,13 +119,14 @@ func (m *model) loadWorkspaces() tea.Cmd {
 
 func (m *model) loadIssues() tea.Cmd {
 	ws := m.workspace
+	ctrl := m.deps.Issues
 	return func() tea.Msg {
-		issues, err := issueflow.List(ws)
+		issues, err := ctrl.List(ws)
 		if err != nil {
 			return itemsLoadedMsg{resource: ResIssues, err: err}
 		}
 		items := make([]Item, 0, len(issues))
-		byID := make(map[string]issueflow.Issue, len(issues))
+		byID := make(map[string]issue.Issue, len(issues))
 		for _, it := range issues {
 			id := fmt.Sprintf("%s#%d", it.Repository, it.Number)
 			items = append(items, Item{
@@ -142,7 +138,7 @@ func (m *model) loadIssues() tea.Cmd {
 		}
 		status := ""
 		if len(items) == 0 {
-			if issueflow.HasGhProject(ws) {
+			if ctrl.HasGhProject(ws) {
 				status = "no backlog issues"
 			} else {
 				status = "no open issues in " + ws.BranchRepo
@@ -154,25 +150,26 @@ func (m *model) loadIssues() tea.Cmd {
 
 func (m *model) loadPRs() tea.Cmd {
 	ws := m.workspace
+	ctrl := m.deps.PRs
 	return func() tea.Msg {
-		prs, err := prflow.List(ws)
+		prs, err := ctrl.List(ws)
 		if err != nil {
 			return itemsLoadedMsg{resource: ResPRs, err: err}
 		}
 		items := make([]Item, 0, len(prs))
-		byID := make(map[string]prflow.PR, len(prs))
-		for _, pr := range prs {
-			id := fmt.Sprintf("%s#%d", pr.Repository, pr.Number)
-			detail := pr.Author
-			if pr.IsDraft {
+		byID := make(map[string]pr.PR, len(prs))
+		for _, p := range prs {
+			id := fmt.Sprintf("%s#%d", p.Repository, p.Number)
+			detail := p.Author
+			if p.IsDraft {
 				detail += " · draft"
 			}
 			items = append(items, Item{
 				ID:     id,
-				Title:  fmt.Sprintf("#%d  %s", pr.Number, pr.Title),
+				Title:  fmt.Sprintf("#%d  %s", p.Number, p.Title),
 				Detail: detail,
 			})
-			byID[id] = pr
+			byID[id] = p
 		}
 		status := ""
 		if len(items) == 0 {
@@ -183,24 +180,20 @@ func (m *model) loadPRs() tea.Cmd {
 }
 
 func (m *model) loadClankers() tea.Cmd {
+	ctrl := m.deps.Clankers
 	return func() tea.Msg {
-		claudes, err := proc.Claudes()
+		clankers, err := ctrl.List()
 		if err != nil {
 			return itemsLoadedMsg{resource: ResClankers, err: err}
 		}
-		panes, err := proc.TmuxPanes()
-		if err != nil {
-			return itemsLoadedMsg{resource: ResClankers, err: err}
-		}
-		items := make([]Item, 0, len(claudes))
-		for _, c := range claudes {
-			cwd, _ := proc.Cwd(c.PID)
-			it := Item{ID: fmt.Sprintf("pid-%d", c.PID), Title: fmt.Sprintf("claude (%d)", c.PID), Detail: cwd}
-			if pane, ok := proc.FindTmuxPane(panes, c.PID); ok {
-				it.ID = pane.Session // activatable: jump to this session
-				it.Title = pane.Session
-				it.Detail = fmt.Sprintf("%s  ·  %s", pane.PaneTitle, cwd)
-				it.Active = tmuxx.HasSession(pane.Session)
+		items := make([]Item, 0, len(clankers))
+		for _, c := range clankers {
+			it := Item{ID: fmt.Sprintf("pid-%d", c.PID), Title: fmt.Sprintf("claude (%d)", c.PID), Detail: c.Cwd}
+			if c.InTmux() {
+				it.ID = c.Session // activatable: jump to this session
+				it.Title = c.Session
+				it.Detail = fmt.Sprintf("%s  ·  %s", c.PaneTitle, c.Cwd)
+				it.Active = c.Active
 			}
 			items = append(items, it)
 		}
@@ -220,28 +213,18 @@ func (m *model) loadClankers() tea.Cmd {
 // fetch failure is non-fatal — offline, we still list cached branches.
 func (m *model) loadBranches() tea.Cmd {
 	ws := m.workspace
+	svc := m.deps.WorktreeSvc
 	return func() tea.Msg {
 		fetchNote := ""
-		if err := gitx.Fetch(ws.Repo); err != nil {
+		if err := svc.Fetch(ws); err != nil {
 			fetchNote = "fetch failed; showing cached branches"
 		}
-		all, err := gitx.BranchesByRecency(ws.Repo)
+		branches, err := svc.Branches(ws)
 		if err != nil {
 			return itemsLoadedMsg{branchPick: true, err: err}
 		}
-		existing, err := gitx.Worktrees(ws.Worktrees)
-		if err != nil {
-			return itemsLoadedMsg{branchPick: true, err: err}
-		}
-		exclude := map[string]bool{ws.Trunk: true}
-		for _, w := range existing {
-			exclude[w] = true
-		}
-		items := make([]Item, 0, len(all))
-		for _, b := range all {
-			if exclude[b] {
-				continue
-			}
+		items := make([]Item, 0, len(branches))
+		for _, b := range branches {
 			items = append(items, Item{ID: b, Title: b})
 		}
 		status := fetchNote
@@ -250,4 +233,12 @@ func (m *model) loadBranches() tea.Cmd {
 		}
 		return itemsLoadedMsg{branchPick: true, items: items, status: status}
 	}
+}
+
+// worktreeType maps the worktree entity's type to the TUI's row tag.
+func worktreeType(t worktree.Type) WorktreeType {
+	if t == worktree.Main {
+		return WorktreeMain
+	}
+	return WorktreeLinked
 }

@@ -1,4 +1,4 @@
-package issueflow
+package issue
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ func TestFilterBacklog(t *testing.T) {
 	repos := []string{"org/api"}
 	statuses := []string{"📋 Backlog", "Platform Backlog"}
 
-	got := FilterBacklog(items, repos, statuses)
+	got := filterBacklog(items, repos, statuses)
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2 (%v)", len(got), got)
 	}
@@ -33,10 +33,10 @@ func TestFilterBacklog(t *testing.T) {
 		t.Errorf("got ids %s,%s; want a,d", got[0].ID, got[1].ID)
 	}
 
-	if r := FilterBacklog(nil, repos, statuses); len(r) != 0 {
+	if r := filterBacklog(nil, repos, statuses); len(r) != 0 {
 		t.Errorf("empty input: got len=%d", len(r))
 	}
-	if r := FilterBacklog(items, nil, statuses); len(r) != 0 {
+	if r := filterBacklog(items, nil, statuses); len(r) != 0 {
 		t.Errorf("no repos: got len=%d", len(r))
 	}
 }
@@ -48,18 +48,18 @@ func TestFindItem(t *testing.T) {
 		mkItem("c", 1, "org/web", "z", "📋 Backlog"),
 	}
 
-	got, ok := FindItem(items, 2, "org/api")
+	got, ok := findItem(items, 2, "org/api")
 	if !ok || got.ID != "b" {
 		t.Errorf("want b/true, got %s/%v", got.ID, ok)
 	}
-	got, ok = FindItem(items, 1, "org/web")
+	got, ok = findItem(items, 1, "org/web")
 	if !ok || got.ID != "c" {
 		t.Errorf("want c/true, got %s/%v", got.ID, ok)
 	}
-	if _, ok := FindItem(items, 99, "org/api"); ok {
+	if _, ok := findItem(items, 99, "org/api"); ok {
 		t.Error("want false for missing num")
 	}
-	if _, ok := FindItem(items, 1, "org/missing"); ok {
+	if _, ok := findItem(items, 1, "org/missing"); ok {
 		t.Error("want false for missing repo")
 	}
 }
@@ -79,7 +79,7 @@ func TestNeedsReassign(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			other, needs := NeedsReassign(Issue{Assignees: c.assignees}, c.me)
+			other, needs := Service{}.NeedsReassign(Issue{Assignees: c.assignees}, c.me)
 			if other != c.other || needs != c.needs {
 				t.Errorf("got (%q,%v), want (%q,%v)", other, needs, c.other, c.needs)
 			}
@@ -100,7 +100,7 @@ func TestNeedsBranchEdit(t *testing.T) {
 	}
 	for _, c := range cases {
 		ws := &config.Workspace{MaxBranchLen: c.limit}
-		if got := NeedsBranchEdit(ws, c.branch); got != c.want {
+		if got := (Service{}).NeedsBranchEdit(ws, c.branch); got != c.want {
 			t.Errorf("NeedsBranchEdit(limit=%d, %q)=%v, want %v", c.limit, c.branch, got, c.want)
 		}
 	}

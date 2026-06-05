@@ -7,8 +7,8 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 )
 
 func TestParseCommand(t *testing.T) {
@@ -38,7 +38,7 @@ func TestParseCommand(t *testing.T) {
 
 // testModel builds a model with a fixed item set for state tests.
 func testModel(items []Item) *model {
-	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.items = items
 	m.applyFilter()
 	return m
@@ -143,10 +143,10 @@ func TestSwitchResourceResetsState(t *testing.T) {
 }
 
 func TestActivateIssueStartsFlow(t *testing.T) {
-	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{})
+	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{}, Deps{})
 	m.resource = ResIssues
 	m.items = []Item{{ID: "owner/repo#42", Title: "#42 thing"}}
-	m.issues = map[string]issueflow.Issue{
+	m.issues = map[string]issue.Issue{
 		"owner/repo#42": {Number: 42, Repository: "owner/repo", Title: "thing"},
 	}
 	m.applyFilter()
@@ -166,10 +166,10 @@ func TestActivateIssueStartsFlow(t *testing.T) {
 }
 
 func TestActivatePRStartsFlow(t *testing.T) {
-	m := newModel("ws", &config.Workspace{}, nil, ResPRs, config.Tui{})
+	m := newModel("ws", &config.Workspace{}, nil, ResPRs, config.Tui{}, Deps{})
 	m.resource = ResPRs
 	m.items = []Item{{ID: "owner/repo#7", Title: "#7 thing"}}
-	m.prs = map[string]prflow.PR{
+	m.prs = map[string]pr.PR{
 		"owner/repo#7": {Number: 7, Repository: "owner/repo", Title: "thing", HeadRefName: "feat-x"},
 	}
 	m.applyFilter()
@@ -189,7 +189,7 @@ func TestActivatePRStartsFlow(t *testing.T) {
 }
 
 func TestBranchEditModalRenders(t *testing.T) {
-	m := newModel("ws", &config.Workspace{MaxBranchLen: 5}, nil, ResIssues, config.Tui{})
+	m := newModel("ws", &config.Workspace{MaxBranchLen: 5}, nil, ResIssues, config.Tui{}, Deps{})
 	m.pending = &fromIssueState{branch: "1-really-long-branch"}
 
 	// Branch exceeds the limit, so the edit modal opens without applying.
@@ -237,9 +237,9 @@ func TestStatusBarStaysOneLine(t *testing.T) {
 }
 
 func TestFromIssuePreparedPromptsReassign(t *testing.T) {
-	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{})
+	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{}, Deps{})
 	m.handleFromIssuePrepared(fromIssuePreparedMsg{
-		issue:  issueflow.Issue{Number: 1, Assignees: []string{"someone-else"}},
+		iss:    issue.Issue{Number: 1, Assignees: []string{"someone-else"}},
 		me:     "me",
 		branch: "1-x",
 	})
@@ -251,19 +251,20 @@ func TestFromIssuePreparedPromptsReassign(t *testing.T) {
 	}
 }
 
-func TestActivateWorktreeBuildsResult(t *testing.T) {
+func TestActivateWorktreeRecordsAttach(t *testing.T) {
 	ws := &config.Workspace{Trunk: "main", Repo: "/repo", Worktrees: "/wt"}
-	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.items = []Item{{ID: "feat-x", Title: "feat-x", Type: WorktreeLinked}}
 	m.applyFilter()
 
 	m.activate()
-	if m.result.Attach != "ws-feat-x" {
-		t.Fatalf("attach: got %q", m.result.Attach)
+	// Result carries the worktree name; the caller builds-if-missing and
+	// attaches via the session Controller after the TUI exits.
+	if m.result.Attach != "feat-x" {
+		t.Fatalf("attach: got %q, want %q", m.result.Attach, "feat-x")
 	}
-	// No live tmux session in tests, so a build spec must be present.
-	if m.result.Build == nil || m.result.Build.BaseDir != "/wt/feat-x" {
-		t.Fatalf("build spec: got %+v", m.result.Build)
+	if m.result.AttachSession != "" {
+		t.Errorf("AttachSession must be empty for a worktree activation; got %q", m.result.AttachSession)
 	}
 	if m.result.Workspace != ws || m.result.WorkspaceName != "ws" {
 		t.Errorf("result must carry the active workspace; got %v / %q",
@@ -272,13 +273,10 @@ func TestActivateWorktreeBuildsResult(t *testing.T) {
 }
 
 func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
-	// Use unique branch names so tmux session lookups in the test
-	// environment can't match a real session and skew the build-spec
-	// branch in activateWorktree.
 	wsA := config.Workspace{Trunk: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
 	wsB := config.Workspace{Trunk: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
 	all := map[string]config.Workspace{"a": wsA, "b": wsB}
-	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{})
+	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{}, Deps{})
 
 	// Simulate the user invoking `:workspaces` and picking "b".
 	if cmd := m.switchWorkspace("b"); cmd == nil {
@@ -299,13 +297,13 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 	if m.result.Workspace == nil || m.result.Workspace.Repo != "/b" {
 		t.Errorf("result must carry the switched-to workspace pointer; got %v", m.result.Workspace)
 	}
-	if m.result.Build == nil || m.result.Build.BaseDir != "/b" {
-		t.Errorf("build spec must use the switched-to repo; got %+v", m.result.Build)
+	if m.result.Attach != wsB.Trunk {
+		t.Errorf("result must attach to the switched-to worktree; got %q", m.result.Attach)
 	}
 }
 
 func TestDeleteGuardsMainWorktree(t *testing.T) {
-	m := newModel("ws", &config.Workspace{Trunk: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.items = []Item{{ID: "main", Title: "main", Type: WorktreeMain}}
 	m.applyFilter()
 
