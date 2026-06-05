@@ -36,7 +36,7 @@ func TestSave_WorktreeSetupField(t *testing.T) {
 			"solo": {
 				Repo:          "/x",
 				Worktrees:     "/y",
-				MainBranch:    "main",
+				Trunk:         "main",
 				WorktreeSetup: "touch .sam-marker",
 			},
 		},

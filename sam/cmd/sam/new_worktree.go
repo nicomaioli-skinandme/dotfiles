@@ -33,7 +33,7 @@ func newNewWorktreeCmd() *cobra.Command {
 // and attaches. The branch is always provided (by the CLI arg or the
 // TUI's branch picker); selection itself lives in the TUI.
 func runNewWorktree(workspaceName string, workspace *config.Workspace, branch string) error {
-	if err := gitx.FastForwardMain(workspace.Repo, workspace.MainBranch); err != nil {
+	if err := gitx.FastForwardTrunk(workspace.Repo, workspace.Trunk); err != nil {
 		return err
 	}
 	path, err := setup.CreateWorktree(workspace, branch, 0, workspaceName)

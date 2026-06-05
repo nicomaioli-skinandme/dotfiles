@@ -37,8 +37,8 @@ func tmux(args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-// SessionName returns the tmux session name for a branch (or the main
-// branch) within a workspace: "<workspace>-<branch>". Prefixing with the
+// SessionName returns the tmux session name for a branch (or the
+// trunk) within a workspace: "<workspace>-<branch>". Prefixing with the
 // workspace keeps session names unambiguous when multiple workspaces have
 // worktrees for similarly-named branches. See issue #23.
 func SessionName(workspace, branch string) string {

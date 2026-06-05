@@ -28,7 +28,7 @@ import (
 type Resource int
 
 const (
-	ResWorktrees  Resource = iota // main repo and per-branch worktrees
+	ResWorktrees  Resource = iota // main worktree and linked worktrees
 	ResWorkspaces                 // configured workspaces; activate switches the active one
 	ResIssues                     // GitHub Project backlog / open issues (async)
 	ResPRs                        // open PRs requesting you as reviewer (async)
@@ -79,15 +79,27 @@ func commandCandidates() []string {
 	return out
 }
 
+// WorktreeType tags a worktrees-view row as git's main worktree (the
+// repo-root checkout) or a linked worktree (one sam created under the
+// workspace's worktrees dir). Empty on rows of other resources.
+type WorktreeType string
+
+const (
+	WorktreeMain   WorktreeType = "main"
+	WorktreeLinked WorktreeType = "linked"
+)
+
 // Item is one row in the central list. ID is the row's stable identity
 // (used for multi-select and to drive the activation/delete actions);
 // Title is the display text; Detail is optional trailing context;
-// Active marks rows whose tmux session is currently running.
+// Active marks rows whose tmux session is currently running; Type tags
+// worktrees-view rows as the main or a linked worktree (empty elsewhere).
 type Item struct {
 	ID     string
 	Title  string
 	Detail string
 	Active bool
+	Type   WorktreeType
 }
 
 // BuildSpec tells the caller to create a tmux session before attaching.

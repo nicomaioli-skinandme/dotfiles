@@ -36,7 +36,7 @@ const DefaultAutocompleteMax = 5
 type Workspace struct {
 	Repo          string     `mapstructure:"repo" toml:"repo"`
 	Worktrees     string     `mapstructure:"worktrees" toml:"worktrees"`
-	MainBranch    string     `mapstructure:"main_branch" toml:"main_branch"`
+	Trunk         string     `mapstructure:"trunk" toml:"trunk"`
 	BranchRepo    string     `mapstructure:"branch_repo" toml:"branch_repo,omitempty"`
 	MaxBranchLen  int        `mapstructure:"max_branch_len" toml:"max_branch_len,omitempty"`
 	WorktreeSetup string     `mapstructure:"worktree_setup" toml:"worktree_setup,omitempty"`
@@ -266,8 +266,8 @@ func validate(cfg *Config) error {
 		if w.Worktrees == "" {
 			return fmt.Errorf("workspace %q: worktrees is required", name)
 		}
-		if w.MainBranch == "" {
-			return fmt.Errorf("workspace %q: main_branch is required", name)
+		if w.Trunk == "" {
+			return fmt.Errorf("workspace %q: trunk is required", name)
 		}
 		if w.FromIssue.RepoWindow != "" {
 			found := false

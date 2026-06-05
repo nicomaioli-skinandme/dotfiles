@@ -10,14 +10,14 @@ func twoWorkspaceCfg(t *testing.T, repoA, repoB string) *Config {
 	return &Config{
 		Workspaces: map[string]Workspace{
 			"a": {
-				Repo:       repoA,
-				Worktrees:  repoA + ".worktrees",
-				MainBranch: "main",
+				Repo:      repoA,
+				Worktrees: repoA + ".worktrees",
+				Trunk:     "main",
 			},
 			"b": {
-				Repo:       repoB,
-				Worktrees:  repoB + ".worktrees",
-				MainBranch: "main",
+				Repo:      repoB,
+				Worktrees: repoB + ".worktrees",
+				Trunk:     "main",
 			},
 		},
 	}
@@ -107,9 +107,9 @@ func TestResolve_SingleWorkspaceShortcut(t *testing.T) {
 	cfg := &Config{
 		Workspaces: map[string]Workspace{
 			"only": {
-				Repo:       repoA,
-				Worktrees:  repoA + ".worktrees",
-				MainBranch: "main",
+				Repo:      repoA,
+				Worktrees: repoA + ".worktrees",
+				Trunk:     "main",
 			},
 		},
 	}

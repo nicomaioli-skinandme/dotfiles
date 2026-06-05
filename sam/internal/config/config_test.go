@@ -11,7 +11,7 @@ const fullAndbegin = `
 [workspaces.andbegin]
 repo            = "~/Code/andbegin-monorepo"
 worktrees       = "~/Code/andbegin-monorepo.worktrees"
-main_branch     = "master"
+trunk     = "master"
 branch_repo     = "skinandme/andbegin-monorepo"
 max_branch_len  = 20
 
@@ -102,7 +102,7 @@ func TestLoad_MissingRequiredField(t *testing.T) {
 	body := `
 [workspaces.andbegin]
 worktrees   = "~/wt"
-main_branch = "master"
+trunk = "master"
 `
 	path := writeConfig(t, body)
 	_, err := Load(path)
@@ -118,7 +118,7 @@ const soloWorkspace = `
 [workspaces.solo]
 repo        = "/x"
 worktrees   = "/y"
-main_branch = "main"
+trunk = "main"
 `
 
 func TestLoad_AutocompleteMaxDefault(t *testing.T) {
@@ -154,7 +154,7 @@ func TestResolve_SingleWorkspaceNoDefault(t *testing.T) {
 [workspaces.solo]
 repo        = "/x"
 worktrees   = "/y"
-main_branch = "main"
+trunk = "main"
 `
 	path := writeConfig(t, body)
 	cfg, err := Load(path)
@@ -175,7 +175,7 @@ func TestLoad_RepoWindowMismatch(t *testing.T) {
 [workspaces.andbegin]
 repo        = "/x"
 worktrees   = "/y"
-main_branch = "main"
+trunk = "main"
 
 [workspaces.andbegin.from_issue]
 repo_window = "nope"
@@ -237,7 +237,7 @@ func TestLoad_FromPRRepoWindowMismatch(t *testing.T) {
 [workspaces.andbegin]
 repo        = "/x"
 worktrees   = "/y"
-main_branch = "main"
+trunk = "main"
 
 [workspaces.andbegin.from_pr]
 repo_window = "nope"
@@ -261,12 +261,12 @@ func TestResolve_ExplicitFlag(t *testing.T) {
 [workspaces.andbegin]
 repo        = "/a"
 worktrees   = "/wa"
-main_branch = "main"
+trunk = "main"
 
 [workspaces.other]
 repo        = "/b"
 worktrees   = "/wb"
-main_branch = "main"
+trunk = "main"
 `
 	path := writeConfig(t, body)
 	cfg, err := Load(path)
@@ -290,12 +290,12 @@ func TestResolve_MultiWorkspaceNoCwdMatch(t *testing.T) {
 [workspaces.a]
 repo        = "/a"
 worktrees   = "/wa"
-main_branch = "main"
+trunk = "main"
 
 [workspaces.b]
 repo        = "/b"
 worktrees   = "/wb"
-main_branch = "main"
+trunk = "main"
 `
 	path := writeConfig(t, body)
 	cfg, err := Load(path)

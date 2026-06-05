@@ -80,18 +80,18 @@ func CurrentBranch(repo string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// FastForwardMain fast-forwards to origin/<mainBranch> only when the
-// working tree is currently on <mainBranch>. If it isn't, no-op — the
+// FastForwardTrunk fast-forwards to origin/<trunk> only when the
+// working tree is currently on <trunk>. If it isn't, no-op — the
 // caller has work in flight on another branch.
-func FastForwardMain(repo, mainBranch string) error {
+func FastForwardTrunk(repo, trunk string) error {
 	cur, err := CurrentBranch(repo)
 	if err != nil {
 		return err
 	}
-	if cur != mainBranch {
+	if cur != trunk {
 		return nil
 	}
-	_, err = run(repo, "merge", "--ff-only", "origin/"+mainBranch)
+	_, err = run(repo, "merge", "--ff-only", "origin/"+trunk)
 	return err
 }
 

@@ -44,7 +44,7 @@ func TestCreateWorktree_NoHook(t *testing.T) {
 	wts := filepath.Join(root, "wts")
 	initRepo(t, repo)
 
-	ws := &config.Workspace{Repo: repo, Worktrees: wts, MainBranch: "main"}
+	ws := &config.Workspace{Repo: repo, Worktrees: wts, Trunk: "main"}
 	path, err := CreateWorktree(ws, "feature", 0, "demo")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
@@ -74,7 +74,7 @@ func TestCreateWorktree_HookRunsWithEnv(t *testing.T) {
 	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
-		MainBranch:    "main",
+		Trunk:         "main",
 		WorktreeSetup: hook,
 	}
 	path, err := CreateWorktree(ws, "feature", 42, "demo")
@@ -118,7 +118,7 @@ func TestCreateWorktree_HookFailureBubblesUp(t *testing.T) {
 	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
-		MainBranch:    "main",
+		Trunk:         "main",
 		WorktreeSetup: "exit 7",
 	}
 	_, err := CreateWorktree(ws, "feature", 0, "demo")
@@ -144,7 +144,7 @@ func TestCreateWorktree_IssueZeroLeavesEnvEmpty(t *testing.T) {
 	ws := &config.Workspace{
 		Repo:          repo,
 		Worktrees:     wts,
-		MainBranch:    "main",
+		Trunk:         "main",
 		WorktreeSetup: `printf "%s" "$SAM_ISSUE_NUMBER" > ` + hookOut,
 	}
 	if _, err := CreateWorktree(ws, "feature", 0, "demo"); err != nil {

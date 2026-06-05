@@ -68,7 +68,7 @@ func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
 			Workspace:     m.workspace,
 			WorkspaceName: m.workspaceName,
 		}
-	case name == m.workspace.MainBranch:
+	case it.Type == WorktreeMain:
 		m.result = Result{
 			Attach:        session,
 			Build:         &BuildSpec{BaseDir: m.workspace.Repo},
@@ -321,8 +321,8 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	if it.ID == m.workspace.MainBranch {
-		m.status = "cannot delete the main repo"
+	if it.Type == WorktreeMain {
+		m.status = "cannot delete the main worktree"
 		return m, nil
 	}
 	if cur, _ := tmuxx.CurrentSession(); cur == tmuxx.SessionName(m.workspaceName, it.ID) {
