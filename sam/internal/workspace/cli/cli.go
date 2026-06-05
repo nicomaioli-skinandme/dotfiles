@@ -7,6 +7,8 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -75,14 +77,16 @@ func newAddCmd() *cobra.Command {
 		Short: "Add a workspace to ~/.config/sam/config.toml via guided wizard",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runAdd(cmd)
+			return RunAddWizard(cmd.OutOrStdout())
 		},
 	}
 }
 
-// runAdd loads any existing config, runs the guided wizard to append a
-// workspace, and saves. A cancelled wizard is a no-op.
-func runAdd(cmd *cobra.Command) error {
+// RunAddWizard loads any existing config, runs the guided wizard to append
+// a workspace, and saves, reporting the written path to w. A cancelled
+// wizard is a no-op. It is exported so the menu (the TUI's `a` on the
+// workspaces view) drives the same flow as `sam workspace add`.
+func RunAddWizard(w io.Writer) error {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return err
@@ -106,7 +110,7 @@ func runAdd(cmd *cobra.Command) error {
 	if err := config.Save(updated, path); err != nil {
 		return err
 	}
-	cmd.Printf("Wrote %s\n", path)
+	fmt.Fprintf(w, "Wrote %s\n", path)
 	return nil
 }
 

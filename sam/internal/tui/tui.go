@@ -21,8 +21,28 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/clanker"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/session"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
+
+// Deps are the entity Controllers and Services the TUI consumes. The TUI is
+// just another consumer of the same backend the cli uses: it holds the
+// Controllers for the orchestrated actions (list/develop/review/delete) and
+// a few Services for the primitive lookups its Elm flows need (branch
+// candidates, session name/existence, the pure reassign/branch checks).
+type Deps struct {
+	Worktrees   worktree.Controller
+	WorktreeSvc worktree.Service
+	Issues      issue.Controller
+	IssueSvc    issue.Service
+	PRs         pr.Controller
+	Clankers    clanker.Controller
+	SessionSvc  session.Service
+}
 
 // Resource is one navigable category, switched between with `:`.
 type Resource int
@@ -102,13 +122,16 @@ type Item struct {
 	Type   WorktreeType
 }
 
-// BuildSpec tells the caller to create a tmux session before attaching.
-type BuildSpec struct {
-	BaseDir string // working directory for the session's first window
-}
-
 // Result is the single value the TUI hands back on exit. At most one of
 // its actions is set; an all-zero Result means "user quit, do nothing".
+// The caller performs the action after the program has released the
+// terminal (attaching replaces the process image, which the TUI can't do
+// while it owns the terminal).
+//
+// Attach names a worktree to attach to (the caller builds its session if
+// absent); AttachSession names an already-built session to attach to
+// directly (the issue/pr flows build it before exit; clankers point at an
+// existing session). At most one is set.
 //
 // Workspace + WorkspaceName carry the workspace the TUI was operating
 // on when the user picked the action — this is not necessarily the
@@ -116,8 +139,8 @@ type BuildSpec struct {
 // `:workspaces`). Post-TUI callers MUST prefer these over their own
 // captured workspace pointer when present.
 type Result struct {
-	Attach            string            // session to switch/attach to after exit
-	Build             *BuildSpec        // create this session (named by Attach) first
+	Attach            string            // worktree to build-if-missing and attach to
+	AttachSession     string            // already-built session to attach to directly
 	RunWizard         bool              // run `workspace add` wizard after exit
 	NewWorktreeBranch string            // run new-worktree for this branch after exit
 	Workspace         *config.Workspace // workspace active in the TUI at exit
@@ -128,8 +151,8 @@ type Result struct {
 // returns the action the user chose. all is the set of configured
 // workspaces (for `:workspaces`); start is the resource to open on;
 // tuiCfg carries menu-level settings (e.g. autocomplete sizing).
-func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui) (Result, error) {
-	m := newModel(workspaceName, workspace, all, start, tuiCfg)
+func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui, deps Deps) (Result, error) {
+	m := newModel(workspaceName, workspace, all, start, tuiCfg, deps)
 	final, err := tea.NewProgram(m).Run()
 	if err != nil {
 		return Result{}, err

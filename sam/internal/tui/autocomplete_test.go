@@ -204,7 +204,7 @@ func stripANSI(s string) string {
 // Wiring: entering command mode opens the popup; typing narrows it; Enter
 // runs the highlighted entry through the unchanged parseCommand flow.
 func TestCommandModeAutocompleteWiring(t *testing.T) {
-	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
 
 	m.enterMode(modeCommand)
 	if !m.ac.Visible() {
@@ -238,7 +238,7 @@ func TestCommandModeAutocompleteWiring(t *testing.T) {
 // Driving real key presses through handleInputKey: typing filters the
 // popup live, and Enter runs the highlighted entry.
 func TestHandleInputKeyTypeAndEnter(t *testing.T) {
-	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.enterMode(modeCommand)
 
 	for _, r := range "iss" {
@@ -261,7 +261,7 @@ func TestHandleInputKeyTypeAndEnter(t *testing.T) {
 // A bare `:` followed by Enter stays a no-op (it must not fire whatever
 // candidate happens to sit first in the popup).
 func TestHandleInputKeyBareColonEnterIsNoop(t *testing.T) {
-	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.enterMode(modeCommand)
 
 	m.handleInputKey(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -277,7 +277,7 @@ func TestHandleInputKeyBareColonEnterIsNoop(t *testing.T) {
 }
 
 func TestCompleteFromPopupFillsInput(t *testing.T) {
-	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{})
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.enterMode(modeCommand)
 
 	// Tab cycles the highlight and fills the input without re-filtering, so

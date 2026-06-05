@@ -2,18 +2,14 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/gitx"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
 
 // actionDoneMsg reports the result of an in-TUI mutation (e.g. delete)
@@ -56,33 +52,14 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// activateWorktree records an attach (building the session first when it
-// doesn't already exist), mirroring the old menu's selection logic.
+// activateWorktree records the worktree to attach to and quits; the caller
+// (after the TUI releases the terminal) builds its session if absent and
+// attaches, via the session Controller.
 func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
-	name := it.ID
-	session := tmuxx.SessionName(m.workspaceName, name)
-	switch {
-	case tmuxx.HasSession(session):
-		m.result = Result{
-			Attach:        session,
-			Workspace:     m.workspace,
-			WorkspaceName: m.workspaceName,
-		}
-	case it.Type == WorktreeMain:
-		m.result = Result{
-			Attach:        session,
-			Build:         &BuildSpec{BaseDir: m.workspace.Repo},
-			Workspace:     m.workspace,
-			WorkspaceName: m.workspaceName,
-		}
-	default:
-		baseDir := filepath.Join(m.workspace.Worktrees, name)
-		m.result = Result{
-			Attach:        session,
-			Build:         &BuildSpec{BaseDir: baseDir},
-			Workspace:     m.workspace,
-			WorkspaceName: m.workspaceName,
-		}
+	m.result = Result{
+		Attach:        it.ID,
+		Workspace:     m.workspace,
+		WorkspaceName: m.workspaceName,
 	}
 	return m, tea.Quit
 }
@@ -103,7 +80,7 @@ func (m *model) switchWorkspace(name string) tea.Cmd {
 // fromIssueState tracks an in-flight from-issue flow across its async
 // steps and modal prompts.
 type fromIssueState struct {
-	issue    issueflow.Issue
+	iss      issue.Issue
 	me       string
 	branch   string
 	existing string
@@ -113,14 +90,14 @@ type fromIssueState struct {
 // fromIssuePreparedMsg reports the result of resolving the current user
 // and planning the issue's branch.
 type fromIssuePreparedMsg struct {
-	issue    issueflow.Issue
+	iss      issue.Issue
 	me       string
 	branch   string
 	existing string
 	err      error
 }
 
-// fromIssueDoneMsg reports the result of the bootstrap (issueflow.Apply).
+// fromIssueDoneMsg reports the result of the bootstrap (issue Apply).
 type fromIssueDoneMsg struct {
 	session string
 	err     error
@@ -130,7 +107,7 @@ type fromIssueDoneMsg struct {
 // the current user and plan the branch, then (via modals) confirm any
 // reassignment and branch edit before bootstrapping.
 func (m *model) activateIssue(it Item) (tea.Model, tea.Cmd) {
-	issue, ok := m.issues[it.ID]
+	iss, ok := m.issues[it.ID]
 	if !ok {
 		m.status = "no issue data for " + it.ID
 		return m, nil
@@ -138,16 +115,13 @@ func (m *model) activateIssue(it Item) (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.status = ""
 	ws := m.workspace
+	ctrl := m.deps.Issues
 	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
-		me, err := ghx.CurrentUser()
+		me, branch, existing, err := ctrl.Prepare(ws, iss)
 		if err != nil {
 			return fromIssuePreparedMsg{err: err}
 		}
-		branch, existing, err := issueflow.Plan(ws, issue)
-		if err != nil {
-			return fromIssuePreparedMsg{err: err}
-		}
-		return fromIssuePreparedMsg{issue: issue, me: me, branch: branch, existing: existing}
+		return fromIssuePreparedMsg{iss: iss, me: me, branch: branch, existing: existing}
 	})
 }
 
@@ -160,9 +134,9 @@ func (m *model) handleFromIssuePrepared(msg fromIssuePreparedMsg) (tea.Model, te
 		m.status = "gh errored"
 		return m, nil
 	}
-	m.pending = &fromIssueState{issue: msg.issue, me: msg.me, branch: msg.branch, existing: msg.existing}
+	m.pending = &fromIssueState{iss: msg.iss, me: msg.me, branch: msg.branch, existing: msg.existing}
 
-	if other, needs := issueflow.NeedsReassign(msg.issue, msg.me); needs {
+	if other, needs := m.deps.IssueSvc.NeedsReassign(msg.iss, msg.me); needs {
 		m.modal = modalState{
 			kind:  modalConfirm,
 			title: fmt.Sprintf("Issue assigned to %s. Reassign to you?", other),
@@ -180,7 +154,7 @@ func (m *model) handleFromIssuePrepared(msg fromIssuePreparedMsg) (tea.Model, te
 // workspace limit, then applies the bootstrap.
 func (m *model) fromIssueBranchStep(reassign bool) (tea.Model, tea.Cmd) {
 	m.pending.reassign = reassign
-	if issueflow.NeedsBranchEdit(m.workspace, m.pending.branch) {
+	if m.deps.IssueSvc.NeedsBranchEdit(m.workspace, m.pending.branch) {
 		ti := textinput.New()
 		ti.SetVirtualCursor(true)
 		ti.SetValue(m.pending.branch)
@@ -209,8 +183,9 @@ func (m *model) fromIssueApplyCmd() tea.Cmd {
 	st := *m.pending
 	ws := m.workspace
 	wsName := m.workspaceName
+	ctrl := m.deps.Issues
 	return tea.Batch(m.spinner.Tick, func() tea.Msg {
-		session, err := issueflow.Apply(ws, wsName, st.issue, st.me, st.reassign, st.branch, st.existing)
+		session, err := ctrl.Apply(ws, wsName, st.iss, st.me, st.reassign, st.branch, st.existing)
 		return fromIssueDoneMsg{session: session, err: err}
 	})
 }
@@ -224,15 +199,16 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 		m.status = "gh errored"
 		return m, nil
 	}
+	// The issue Apply already built the session; attach to it directly.
 	m.result = Result{
-		Attach:        msg.session,
+		AttachSession: msg.session,
 		Workspace:     m.workspace,
 		WorkspaceName: m.workspaceName,
 	}
 	return m, tea.Quit
 }
 
-// fromPRDoneMsg reports the result of the PR review bootstrap (prflow.Apply).
+// fromPRDoneMsg reports the result of the PR review bootstrap (pr Apply).
 type fromPRDoneMsg struct {
 	session string
 	err     error
@@ -240,10 +216,10 @@ type fromPRDoneMsg struct {
 
 // activatePR bootstraps a review worktree for the picked PR. Unlike the
 // issue flow there are no modals (no reassign/branch-edit): we check out
-// the PR's existing head branch, so this just runs prflow.Apply behind a
+// the PR's existing head branch, so this just runs the pr Apply behind a
 // spinner and attaches.
 func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
-	pr, ok := m.prs[it.ID]
+	p, ok := m.prs[it.ID]
 	if !ok {
 		m.status = "no PR data for " + it.ID
 		return m, nil
@@ -252,8 +228,9 @@ func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
 	m.status = ""
 	ws := m.workspace
 	wsName := m.workspaceName
+	ctrl := m.deps.PRs
 	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
-		session, err := prflow.Apply(ws, wsName, pr)
+		session, err := ctrl.Apply(ws, wsName, p)
 		return fromPRDoneMsg{session: session, err: err}
 	})
 }
@@ -266,8 +243,9 @@ func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 		m.status = "gh errored"
 		return m, nil
 	}
+	// The pr Apply already built the session; attach to it directly.
 	m.result = Result{
-		Attach:        msg.session,
+		AttachSession: msg.session,
 		Workspace:     m.workspace,
 		WorkspaceName: m.workspaceName,
 	}
@@ -276,12 +254,12 @@ func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 
 // activateClanker attaches to the clanker's tmux session when it has one.
 func (m *model) activateClanker(it Item) (tea.Model, tea.Cmd) {
-	if !tmuxx.HasSession(it.ID) {
+	if !m.deps.SessionSvc.Has(it.ID) {
 		m.status = "no tmux session for this clanker"
 		return m, nil
 	}
 	m.result = Result{
-		Attach:        it.ID,
+		AttachSession: it.ID,
 		Workspace:     m.workspace,
 		WorkspaceName: m.workspaceName,
 	}
@@ -325,36 +303,31 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 		m.status = "cannot delete the main worktree"
 		return m, nil
 	}
-	if cur, _ := tmuxx.CurrentSession(); cur == tmuxx.SessionName(m.workspaceName, it.ID) {
+	if cur, _ := m.deps.SessionSvc.Current(); cur == m.deps.SessionSvc.Name(m.workspaceName, it.ID) {
 		m.status = "cannot delete the session you're attached to"
 		return m, nil
 	}
 	target := it.ID
 	ws := m.workspace
 	wsName := m.workspaceName
+	ctrl := m.deps.Worktrees
 	m.modal = modalState{
 		kind:  modalConfirm,
 		title: fmt.Sprintf("Delete worktree %q?", target),
 		onConfirm: func() tea.Cmd {
 			m.deleting[target] = true
 			m.status = ""
-			return tea.Batch(m.spinner.Tick, deleteWorktreeCmd(ws, wsName, target))
+			return tea.Batch(m.spinner.Tick, deleteWorktreeCmd(ctrl, ws, wsName, target))
 		},
 	}
 	return m, nil
 }
 
 // deleteWorktreeCmd kills the session (if any) and force-removes the
-// worktree, off the UI goroutine.
-func deleteWorktreeCmd(ws *config.Workspace, wsName, target string) tea.Cmd {
+// worktree, off the UI goroutine, via the worktree Controller.
+func deleteWorktreeCmd(ctrl worktree.Controller, ws *config.Workspace, wsName, target string) tea.Cmd {
 	return func() tea.Msg {
-		session := tmuxx.SessionName(wsName, target)
-		if tmuxx.HasSession(session) {
-			if err := tmuxx.KillSession(session); err != nil {
-				return actionDoneMsg{target: target, err: err}
-			}
-		}
-		if err := gitx.WorktreeRemoveForce(ws.Repo, filepath.Join(ws.Worktrees, target)); err != nil {
+		if err := ctrl.Delete(ws, wsName, target); err != nil {
 			return actionDoneMsg{target: target, err: err}
 		}
 		return actionDoneMsg{target: target, reload: true, info: "deleted " + target}

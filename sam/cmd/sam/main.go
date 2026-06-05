@@ -21,6 +21,7 @@ import (
 	prcli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr/cli"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/session"
 	sessioncli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/session/cli"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace"
@@ -88,7 +89,18 @@ func main() {
 	root.AddCommand(sessioncli.NewCmd(sessionCtrl, mustResolve))
 	root.AddCommand(workspacecli.NewCmd(workspace.Service{}, parseFormat))
 	root.AddCommand(configcli.NewCmd(loadCfg, tryResolve))
-	root.AddCommand(newMenuCmd())
+
+	// The TUI consumes the same controllers/services as the cli.
+	deps := tui.Deps{
+		Worktrees:   worktreeCtrl,
+		WorktreeSvc: worktreeSvc,
+		Issues:      issueCtrl,
+		IssueSvc:    issueSvc,
+		PRs:         prCtrl,
+		Clankers:    clankerCtrl,
+		SessionSvc:  sessionSvc,
+	}
+	root.AddCommand(newMenuCmd(deps, sessionCtrl, worktreeCtrl))
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the build version (short commit hash)",

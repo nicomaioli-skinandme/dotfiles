@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issueflow"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/prflow"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 )
 
 // inputMode is what the top bar is doing: nothing (keys drive the list),
@@ -30,6 +30,7 @@ type model struct {
 	workspaceName string
 	workspace     *config.Workspace
 	all           map[string]config.Workspace
+	deps          Deps
 
 	resource   Resource
 	branchPick bool // transient: the list is showing branches for `a` (new worktree)
@@ -40,9 +41,9 @@ type model struct {
 	query    string
 	selected map[string]bool // multi-select set, keyed by Item.ID
 
-	issues  map[string]issueflow.Issue // resolved issues by Item.ID (ResIssues)
-	prs     map[string]prflow.PR       // resolved PRs by Item.ID (ResPRs)
-	pending *fromIssueState            // in-flight from-issue flow, if any
+	issues  map[string]issue.Issue // resolved issues by Item.ID (ResIssues)
+	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
+	pending *fromIssueState        // in-flight from-issue flow, if any
 
 	mode  inputMode
 	input textinput.Model
@@ -69,7 +70,7 @@ type snapshot struct {
 	query      string
 }
 
-func newModel(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui) *model {
+func newModel(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui, deps Deps) *model {
 	ti := textinput.New()
 	ti.SetVirtualCursor(true)
 
@@ -80,6 +81,7 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		workspaceName: workspaceName,
 		workspace:     workspace,
 		all:           all,
+		deps:          deps,
 		resource:      start,
 		selected:      map[string]bool{},
 		deleting:      map[string]bool{},
