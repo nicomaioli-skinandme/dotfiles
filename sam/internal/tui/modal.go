@@ -19,12 +19,13 @@ const (
 // run when the user answers Yes; for an input modal, onSubmit is run with
 // the entered value.
 type modalState struct {
-	kind       modalKind
-	title      string
-	confirmYes bool // current Yes/No highlight (false = No, the default)
-	onConfirm  func() tea.Cmd
-	input      textinput.Model
-	onSubmit   func(string) tea.Cmd
+	kind        modalKind
+	title       string
+	confirmYes  bool // current Yes/No highlight (false = No, the default)
+	destructive bool // a confirm whose Yes is destructive (renders in the destroy palette)
+	onConfirm   func() tea.Cmd
+	input       textinput.Model
+	onSubmit    func(string) tea.Cmd
 }
 
 func (m *model) closeModal() {

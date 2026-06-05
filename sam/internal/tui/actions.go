@@ -312,8 +312,9 @@ func (m *model) del() (tea.Model, tea.Cmd) {
 	wsName := m.workspaceName
 	ctrl := m.deps.Worktrees
 	m.modal = modalState{
-		kind:  modalConfirm,
-		title: fmt.Sprintf("Delete worktree %q?", target),
+		kind:        modalConfirm,
+		title:       fmt.Sprintf("Delete worktree %q?", target),
+		destructive: true,
 		onConfirm: func() tea.Cmd {
 			m.deleting[target] = true
 			m.status = ""
