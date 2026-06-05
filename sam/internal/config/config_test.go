@@ -149,27 +149,6 @@ func TestLoad_AutocompleteMaxDefault(t *testing.T) {
 	}
 }
 
-func TestResolve_SingleWorkspaceNoDefault(t *testing.T) {
-	body := `
-[workspaces.solo]
-repo        = "/x"
-worktrees   = "/y"
-trunk = "main"
-`
-	path := writeConfig(t, body)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	name, w, err := Resolve(cfg, "", "")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if name != "solo" || w == nil {
-		t.Errorf("Resolve: got %q %v", name, w)
-	}
-}
-
 func TestLoad_RepoWindowMismatch(t *testing.T) {
 	body := `
 [workspaces.andbegin]
@@ -256,57 +235,3 @@ cwd  = "."
 	}
 }
 
-func TestResolve_ExplicitFlag(t *testing.T) {
-	body := `
-[workspaces.andbegin]
-repo        = "/a"
-worktrees   = "/wa"
-trunk = "main"
-
-[workspaces.other]
-repo        = "/b"
-worktrees   = "/wb"
-trunk = "main"
-`
-	path := writeConfig(t, body)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	name, _, err := Resolve(cfg, "other", "")
-	if err != nil {
-		t.Fatalf("Resolve(other): %v", err)
-	}
-	if name != "other" {
-		t.Errorf("explicit flag should win: got %q", name)
-	}
-	if _, _, err := Resolve(cfg, "ghost", ""); err == nil {
-		t.Error("expected error for undefined --workspace")
-	}
-}
-
-func TestResolve_MultiWorkspaceNoCwdMatch(t *testing.T) {
-	body := `
-[workspaces.a]
-repo        = "/a"
-worktrees   = "/wa"
-trunk = "main"
-
-[workspaces.b]
-repo        = "/b"
-worktrees   = "/wb"
-trunk = "main"
-`
-	path := writeConfig(t, body)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	name, ws, err := Resolve(cfg, "", "")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if name != "" || ws != nil {
-		t.Errorf("expected unresolved (\"\", nil); got %q %v", name, ws)
-	}
-}

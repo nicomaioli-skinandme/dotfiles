@@ -16,6 +16,7 @@ import (
 	_ "github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace"
 )
 
 var (
@@ -121,11 +122,14 @@ func loadWorkspaceAndConfig() (string, *config.Workspace, *config.Config, error)
 		return "", nil, nil, err
 	}
 	cwd, _ := os.Getwd()
-	name, ws, err := config.Resolve(cfg, workspaceFlag, cwd)
+	active, err := workspace.Service{}.Resolve(cfg, workspaceFlag, cwd)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	return name, ws, cfg, nil
+	if active == nil {
+		return "", nil, cfg, nil
+	}
+	return active.Name, active.WS, cfg, nil
 }
 
 func runFirstRunWizard(path string) error {

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -23,9 +24,14 @@ func newConfigPrintCmd() *cobra.Command {
 				return err
 			}
 			cwd, _ := os.Getwd()
-			name, ws, err := config.Resolve(cfg, workspaceFlag, cwd)
+			active, err := workspace.Service{}.Resolve(cfg, workspaceFlag, cwd)
 			if err != nil {
 				return err
+			}
+			var name string
+			var ws *config.Workspace
+			if active != nil {
+				name, ws = active.Name, active.WS
 			}
 
 			out := struct {
