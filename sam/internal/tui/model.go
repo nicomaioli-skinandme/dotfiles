@@ -45,9 +45,10 @@ type model struct {
 	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
 	pending *fromIssueState        // in-flight from-issue flow, if any
 
-	mode  inputMode
-	input textinput.Model
-	ac    autocomplete // `:` command popup
+	mode   inputMode
+	input  textinput.Model
+	ac     autocomplete // `:` command popup
+	styles styles       // palette-derived render styles
 
 	loading  bool
 	deleting map[string]bool // worktree IDs with an in-flight delete
@@ -77,6 +78,8 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
+	st := newStyles(tuiCfg.Colors)
+
 	return &model{
 		workspaceName: workspaceName,
 		workspace:     workspace,
@@ -87,7 +90,8 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		deleting:      map[string]bool{},
 		input:         ti,
 		spinner:       sp,
-		ac:            newAutocomplete(tuiCfg.Autocomplete.Max),
+		ac:            newAutocomplete(tuiCfg.Autocomplete.Max, st),
+		styles:        st,
 	}
 }
 

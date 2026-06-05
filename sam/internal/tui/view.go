@@ -11,34 +11,6 @@ import (
 // Fixed chrome around the list: top bar, divider, status bar.
 const chromeHeight = 3
 
-var (
-	dividerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	hintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	cursorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
-	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
-	rowStyle      = lipgloss.NewStyle()
-	activeStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	detailStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	breadcrumb    = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	statusInfo    = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	sidebarTitle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Bold(true)
-	sidebarActive = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	modalBorder   = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("213")).
-			Padding(1, 3)
-	modalAffirm = lipgloss.NewStyle().Padding(0, 2)
-	modalActive = lipgloss.NewStyle().Padding(0, 2).Reverse(true).Bold(true)
-	// Autocomplete popup: same rounded frame as the modal but tighter
-	// padding (a list wants less internal whitespace than a dialog).
-	autocompleteBorder = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("213")).
-				Padding(0, 1)
-	acMatchStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
-	acSelectedStyle = lipgloss.NewStyle().Reverse(true)
-)
-
 func (m *model) View() tea.View {
 	if m.width == 0 || m.height == 0 {
 		return tea.NewView("")
@@ -47,7 +19,7 @@ func (m *model) View() tea.View {
 	base := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.renderTopBar(),
-		dividerStyle.Render(strings.Repeat("─", m.width)),
+		m.styles.divider.Render(strings.Repeat("─", m.width)),
 		m.renderBody(),
 		m.renderStatusBar(),
 	)
@@ -79,7 +51,7 @@ func (m *model) View() tea.View {
 // search/command mode it's the focused text input.
 func (m *model) renderTopBar() string {
 	if m.mode == modeNormal {
-		return hintStyle.Render("  press / to search · : for commands · ? for help")
+		return m.styles.hint.Render("  press / to search · : for commands · ? for help")
 	}
 	return m.input.View()
 }
@@ -135,32 +107,32 @@ func (m *model) renderList(h int) string {
 func (m *model) renderRow(it Item, isCursor bool) string {
 	cursor := "  "
 	if isCursor {
-		cursor = cursorStyle.Render("▸ ")
+		cursor = m.styles.cursor.Render("▸ ")
 	}
 
 	sel := " "
 	if m.selected[it.ID] {
-		sel = selectedStyle.Render("✓")
+		sel = m.styles.selected.Render("✓")
 	}
 
 	bullet := "  "
 	if it.Active {
-		bullet = activeStyle.Render("● ")
+		bullet = m.styles.active.Render("● ")
 	}
 
 	title := it.Title
 	if isCursor {
-		title = cursorStyle.Render(title)
+		title = m.styles.cursor.Render(title)
 	} else {
-		title = rowStyle.Render(title)
+		title = m.styles.row.Render(title)
 	}
 
 	line := fmt.Sprintf("%s%s %s%s", cursor, sel, bullet, title)
 	switch {
 	case m.deleting[it.ID]:
-		line += "  " + m.spinner.View() + " " + detailStyle.Render("deleting…")
+		line += "  " + m.spinner.View() + " " + m.styles.deleting.Render("deleting…")
 	case it.Detail != "":
-		line += "  " + detailStyle.Render("("+it.Detail+")")
+		line += "  " + m.styles.detail.Render("("+it.Detail+")")
 	}
 	return truncate(line, m.width)
 }
@@ -168,11 +140,11 @@ func (m *model) renderRow(it Item, isCursor bool) string {
 // renderEmpty is the sidebar fallback: a resource switcher on the left,
 // an empty-state message on the right.
 func (m *model) renderEmpty(h int) string {
-	rows := []string{sidebarTitle.Render("RESOURCES"), ""}
+	rows := []string{m.styles.sidebarTitle.Render("RESOURCES"), ""}
 	for _, r := range resources {
 		name := "  " + r.Name()
 		if r == m.resource && !m.branchPick {
-			name = sidebarActive.Render("▸ " + r.Name())
+			name = m.styles.sidebarActive.Render("▸ " + r.Name())
 		}
 		rows = append(rows, name)
 	}
@@ -182,7 +154,7 @@ func (m *model) renderEmpty(h int) string {
 	if m.branchPick {
 		msg = "no branches available"
 	}
-	body := hintStyle.Render(msg + "\n\npress : to switch resource")
+	body := m.styles.hint.Render(msg + "\n\npress : to switch resource")
 	main := lipgloss.Place(m.width-16, h, lipgloss.Center, lipgloss.Center, body)
 
 	return pad(lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main), m.width, h)
@@ -199,10 +171,10 @@ func (m *model) renderStatusBar() string {
 	} else {
 		crumb = fmt.Sprintf(" %s › %s", m.workspaceName, scope)
 	}
-	left := breadcrumb.Render(crumb)
+	left := m.styles.breadcrumb.Render(crumb)
 
 	count := fmt.Sprintf("%d items", len(m.filtered))
-	right := hintStyle.Render(count + "   ? help ")
+	right := m.styles.hint.Render(count + "   ? help ")
 
 	// The status bar must stay exactly one row: renderBody reserves only
 	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)
@@ -213,7 +185,7 @@ func (m *model) renderStatusBar() string {
 	if m.status != "" {
 		avail := m.width - lipgloss.Width(left) - lipgloss.Width(right) - 3 // 2-space pad + 1-space min gap
 		if avail > 0 {
-			mid = "  " + statusInfo.Render(truncate(oneLine(m.status), avail))
+			mid = "  " + m.styles.statusInfo.Render(truncate(oneLine(m.status), avail))
 		}
 	}
 
@@ -233,7 +205,7 @@ func oneLine(s string) string {
 func (m *model) renderModal() string {
 	switch m.modal.kind {
 	case modalHelp:
-		return modalBorder.Render(m.helpText())
+		return m.styles.modalBorder.Render(m.helpText())
 	case modalInput:
 		body := lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -241,21 +213,27 @@ func (m *model) renderModal() string {
 			"",
 			m.modal.input.View(),
 			"",
-			hintStyle.Render("enter confirm · esc cancel"),
+			m.styles.hint.Render("enter confirm · esc cancel"),
 		)
-		return modalBorder.Render(body)
+		return m.styles.modalBorder.Render(body)
 	}
-	// Confirm modal.
-	no := modalAffirm.Render("No")
-	yes := modalAffirm.Render("Yes")
+	// Confirm modal. The highlighted button uses the destroy palette for a
+	// destructive action (e.g. deleting a worktree), otherwise the neutral
+	// active style.
+	active := m.styles.modalActive
+	if m.modal.destructive {
+		active = m.styles.modalDestroy
+	}
+	no := m.styles.modalAffirm.Render("No")
+	yes := m.styles.modalAffirm.Render("Yes")
 	if m.modal.confirmYes {
-		yes = modalActive.Render("Yes")
+		yes = active.Render("Yes")
 	} else {
-		no = modalActive.Render("No")
+		no = active.Render("No")
 	}
 	buttons := lipgloss.JoinHorizontal(lipgloss.Top, no, "   ", yes)
 	body := lipgloss.JoinVertical(lipgloss.Center, m.modal.title, "", buttons)
-	return modalBorder.Render(body)
+	return m.styles.modalBorder.Render(body)
 }
 
 // helpText lists the bindings available in the current context.

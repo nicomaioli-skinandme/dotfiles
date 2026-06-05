@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -20,6 +21,7 @@ type Config struct {
 // opposed to per-workspace configuration.
 type Tui struct {
 	Autocomplete Autocomplete `mapstructure:"autocomplete" toml:"autocomplete,omitempty"`
+	Colors       Colors       `mapstructure:"colors" toml:"colors,omitempty"`
 }
 
 // Autocomplete configures the `:` command popup. Max is the most entries
@@ -30,6 +32,26 @@ type Autocomplete struct {
 
 // DefaultAutocompleteMax is applied when [tui.autocomplete] max is unset.
 const DefaultAutocompleteMax = 5
+
+// Colors is the menu TUI's semantic palette. Each value is an ANSI index
+// ("0".."255"), a hex string ("#RGB" / "#RRGGBB"), or "" for the terminal
+// default. Primary/Secondary/Destroy fall back to the Default* constants
+// when unset; Foreground/Background left empty mean the terminal default.
+type Colors struct {
+	Primary    string `mapstructure:"primary" toml:"primary,omitempty"`
+	Secondary  string `mapstructure:"secondary" toml:"secondary,omitempty"`
+	Destroy    string `mapstructure:"destroy" toml:"destroy,omitempty"`
+	Foreground string `mapstructure:"foreground" toml:"foreground,omitempty"`
+	Background string `mapstructure:"background" toml:"background,omitempty"`
+}
+
+// Default palette, applied when [tui.colors] entries are unset. ANSI
+// indices (not hex) so the palette tracks the user's terminal theme.
+const (
+	DefaultColorPrimary   = "3" // ANSI yellow
+	DefaultColorSecondary = "8" // ANSI bright-black / grey
+	DefaultColorDestroy   = "1" // ANSI red
+)
 
 type Workspace struct {
 	Repo          string     `mapstructure:"repo" toml:"repo"`
@@ -125,6 +147,15 @@ func Load(path string) (*Config, error) {
 	if cfg.Tui.Autocomplete.Max == 0 {
 		cfg.Tui.Autocomplete.Max = DefaultAutocompleteMax
 	}
+	if cfg.Tui.Colors.Primary == "" {
+		cfg.Tui.Colors.Primary = DefaultColorPrimary
+	}
+	if cfg.Tui.Colors.Secondary == "" {
+		cfg.Tui.Colors.Secondary = DefaultColorSecondary
+	}
+	if cfg.Tui.Colors.Destroy == "" {
+		cfg.Tui.Colors.Destroy = DefaultColorDestroy
+	}
 	return &cfg, nil
 }
 
@@ -157,6 +188,29 @@ func expandPaths(cfg *Config) error {
 	return nil
 }
 
+// validColor reports whether s is a value lipgloss can render: empty (the
+// terminal default), an ANSI palette index 0-255, or a #RGB / #RRGGBB hex
+// string.
+func validColor(s string) bool {
+	if s == "" {
+		return true
+	}
+	if strings.HasPrefix(s, "#") {
+		hex := s[1:]
+		if len(hex) != 3 && len(hex) != 6 {
+			return false
+		}
+		for _, r := range hex {
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+				return false
+			}
+		}
+		return true
+	}
+	n, err := strconv.Atoi(s)
+	return err == nil && n >= 0 && n <= 255
+}
+
 func expandHome(path, home string) string {
 	if path == "~" {
 		return home
@@ -174,6 +228,18 @@ func validate(cfg *Config) error {
 
 	if cfg.Tui.Autocomplete.Max < 0 {
 		return fmt.Errorf("tui.autocomplete.max must be >= 0")
+	}
+
+	for field, val := range map[string]string{
+		"primary":    cfg.Tui.Colors.Primary,
+		"secondary":  cfg.Tui.Colors.Secondary,
+		"destroy":    cfg.Tui.Colors.Destroy,
+		"foreground": cfg.Tui.Colors.Foreground,
+		"background": cfg.Tui.Colors.Background,
+	} {
+		if !validColor(val) {
+			return fmt.Errorf("tui.colors.%s %q: must be an ANSI index 0-255, a #hex color, or empty", field, val)
+		}
 	}
 
 	for name, w := range cfg.Workspaces {

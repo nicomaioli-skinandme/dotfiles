@@ -149,6 +149,52 @@ func TestLoad_AutocompleteMaxDefault(t *testing.T) {
 	}
 }
 
+func TestLoad_ColorsDefault(t *testing.T) {
+	// Absent [tui.colors] section falls back to the default palette;
+	// foreground/background stay empty (terminal default).
+	path := writeConfig(t, soloWorkspace)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	c := cfg.Tui.Colors
+	if c.Primary != DefaultColorPrimary || c.Secondary != DefaultColorSecondary || c.Destroy != DefaultColorDestroy {
+		t.Errorf("default palette: got %+v", c)
+	}
+	if c.Foreground != "" || c.Background != "" {
+		t.Errorf("foreground/background should default to empty: got %+v", c)
+	}
+
+	// Explicit values are honored verbatim.
+	body := soloWorkspace + "\n[tui.colors]\nprimary = \"#E5C07B\"\ndestroy = \"9\"\nforeground = \"7\"\n"
+	path = writeConfig(t, body)
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load explicit colors: %v", err)
+	}
+	c = cfg.Tui.Colors
+	if c.Primary != "#E5C07B" || c.Destroy != "9" || c.Foreground != "7" {
+		t.Errorf("explicit colors not honored: %+v", c)
+	}
+	if c.Secondary != DefaultColorSecondary {
+		t.Errorf("unset secondary should default: got %q", c.Secondary)
+	}
+}
+
+func TestLoad_ColorsInvalid(t *testing.T) {
+	for _, bad := range []string{"red", "#12", "#xyzxyz", "256", "-1"} {
+		body := soloWorkspace + "\n[tui.colors]\nprimary = \"" + bad + "\"\n"
+		path := writeConfig(t, body)
+		_, err := Load(path)
+		if err == nil {
+			t.Fatalf("expected error for invalid color %q", bad)
+		}
+		if !strings.Contains(err.Error(), "tui.colors.primary") {
+			t.Errorf("error should mention field for %q: %v", bad, err)
+		}
+	}
+}
+
 func TestLoad_RepoWindowMismatch(t *testing.T) {
 	body := `
 [workspaces.andbegin]
