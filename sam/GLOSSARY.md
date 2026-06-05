@@ -64,4 +64,4 @@ Two annotations appear on entries:
   normally has it checked out; the worktrees view excludes it from the
   branch picker since it already lives in the main worktree.
 - **clanker** — a running Claude process, often inside a tmux pane.
-  Listed by `sam clankers`.
+  Listed by `sam clanker list`.
