@@ -21,6 +21,45 @@ type actionDoneMsg struct {
 	err    error
 }
 
+// attachReadyMsg reports that a worktree's session has been built (or was
+// already present) and names the session to attach to. err is set when the
+// build failed.
+type attachReadyMsg struct {
+	session string
+	err     error
+}
+
+// attachedMsg reports that the tmux client returned — the user detached
+// (outside tmux) or switch-client completed (inside tmux). The model
+// resumes here; err carries any failure from launching the client.
+type attachedMsg struct {
+	err error
+}
+
+// worktreeAddedMsg reports the result of creating a new worktree from the
+// branch-pick sub-view, so the model can drop back to the worktrees list.
+type worktreeAddedMsg struct {
+	branch string
+	err    error
+}
+
+// attachToSession attaches the running TUI to session sess without
+// quitting: inside tmux it switches the client; outside tmux it suspends
+// the program and runs `tmux attach-session` as a child via
+// tea.ExecProcess, resuming the same model when the user detaches. The
+// session must already exist (the worktree path builds it first via
+// Ensure; the issue/pr/clanker paths point at an already-built one).
+func (m *model) attachToSession(sess string) (tea.Model, tea.Cmd) {
+	m.loading = false
+	if m.deps.SessionSvc.InTmux() {
+		svc := m.deps.SessionSvc
+		return m, func() tea.Msg { return attachedMsg{err: svc.Switch(sess)} }
+	}
+	return m, tea.ExecProcess(m.deps.SessionSvc.AttachCmd(sess), func(err error) tea.Msg {
+		return attachedMsg{err: err}
+	})
+}
+
 // activate handles <CR>/l on the highlighted row, dispatching on the
 // current view.
 func (m *model) activate() (tea.Model, tea.Cmd) {
@@ -29,13 +68,18 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.branchPick {
-		// Picked a branch for a new worktree: defer creation to the caller.
-		m.result = Result{
-			NewWorktreeBranch: it.ID,
-			Workspace:         m.workspace,
-			WorkspaceName:     m.workspaceName,
-		}
-		return m, tea.Quit
+		// Picked a branch for a new worktree: create it in place (behind the
+		// spinner), then drop back to the worktrees list. No attach — the
+		// user selects the new worktree to attach.
+		m.loading = true
+		m.status = ""
+		branch := it.ID
+		ws := m.workspace
+		wsName := m.workspaceName
+		ctrl := m.deps.Worktrees
+		return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
+			return worktreeAddedMsg{branch: branch, err: ctrl.Add(ws, wsName, branch)}
+		})
 	}
 	switch m.resource {
 	case ResWorktrees:
@@ -52,16 +96,26 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// activateWorktree records the worktree to attach to and quits; the caller
-// (after the TUI releases the terminal) builds its session if absent and
-// attaches, via the session Controller.
+// activateWorktree builds the worktree's tmux session if absent (off the UI
+// goroutine, behind the spinner), then attaches to it in place. The build
+// uses `new-session -d`, so the session is owned by the tmux server before
+// the attach client ever runs.
 func (m *model) activateWorktree(it Item) (tea.Model, tea.Cmd) {
-	m.result = Result{
-		Attach:        it.ID,
-		Workspace:     m.workspace,
-		WorkspaceName: m.workspaceName,
+	m.loading = true
+	m.status = ""
+	return m, tea.Batch(m.spinner.Tick, m.ensureSessionCmd(m.workspace, m.workspaceName, it.ID))
+}
+
+// ensureSessionCmd builds the worktree's session if absent (using
+// `new-session -d`, so the tmux server owns it) and reports the session to
+// attach to. Split out so the activation wiring is unit-testable without
+// spawning tmux.
+func (m *model) ensureSessionCmd(ws *config.Workspace, wsName, name string) tea.Cmd {
+	svc := m.deps.SessionSvc
+	return func() tea.Msg {
+		sess, err := svc.Ensure(ws, wsName, name)
+		return attachReadyMsg{session: sess, err: err}
 	}
-	return m, tea.Quit
 }
 
 // switchWorkspace changes the active workspace in place and reloads the
@@ -190,8 +244,8 @@ func (m *model) fromIssueApplyCmd() tea.Cmd {
 	})
 }
 
-// handleFromIssueDone records the session to attach to and quits, or
-// surfaces an error and stays.
+// handleFromIssueDone attaches to the session the bootstrap built (in
+// place, without quitting), or surfaces an error and stays.
 func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	m.pending = nil
@@ -200,12 +254,7 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	// The issue Apply already built the session; attach to it directly.
-	m.result = Result{
-		AttachSession: msg.session,
-		Workspace:     m.workspace,
-		WorkspaceName: m.workspaceName,
-	}
-	return m, tea.Quit
+	return m.attachToSession(msg.session)
 }
 
 // fromPRDoneMsg reports the result of the PR review bootstrap (pr Apply).
@@ -235,8 +284,8 @@ func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
 	})
 }
 
-// handleFromPRDone records the session to attach to and quits, or
-// surfaces an error and stays.
+// handleFromPRDone attaches to the session the bootstrap built (in place,
+// without quitting), or surfaces an error and stays.
 func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
@@ -244,26 +293,17 @@ func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	// The pr Apply already built the session; attach to it directly.
-	m.result = Result{
-		AttachSession: msg.session,
-		Workspace:     m.workspace,
-		WorkspaceName: m.workspaceName,
-	}
-	return m, tea.Quit
+	return m.attachToSession(msg.session)
 }
 
-// activateClanker attaches to the clanker's tmux session when it has one.
+// activateClanker attaches to the clanker's tmux session when it has one,
+// in place without quitting.
 func (m *model) activateClanker(it Item) (tea.Model, tea.Cmd) {
 	if !m.deps.SessionSvc.Has(it.ID) {
 		m.status = "no tmux session for this clanker"
 		return m, nil
 	}
-	m.result = Result{
-		AttachSession: it.ID,
-		Workspace:     m.workspace,
-		WorkspaceName: m.workspaceName,
-	}
-	return m, tea.Quit
+	return m.attachToSession(it.ID)
 }
 
 // add handles `a`: only the views where adding is meaningful respond.
@@ -348,6 +388,44 @@ func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadResource()
 	}
 	return m, nil
+}
+
+// handleAttachReady attaches to the just-built session, or surfaces the
+// build error and stays.
+func (m *model) handleAttachReady(msg attachReadyMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.loading = false
+		m.status = "could not build session"
+		return m, nil
+	}
+	return m.attachToSession(msg.session)
+}
+
+// handleAttached resumes after the tmux client returned (detach, or
+// switch-client completing). It reloads the current resource so freshly
+// changed session/clanker state is reflected; the cursor is left where it
+// was, since the model was never torn down.
+func (m *model) handleAttached(msg attachedMsg) (tea.Model, tea.Cmd) {
+	m.loading = false
+	if msg.err != nil {
+		m.status = "attach failed"
+		return m, nil
+	}
+	m.status = ""
+	return m, m.loadResource()
+}
+
+// handleWorktreeAdded drops back to the worktrees list after creating a new
+// worktree, reloading so the new row appears.
+func (m *model) handleWorktreeAdded(msg worktreeAddedMsg) (tea.Model, tea.Cmd) {
+	m.loading = false
+	if msg.err != nil {
+		m.status = "could not create worktree"
+		return m, nil
+	}
+	m.popView() // leave the branch-pick sub-view, back to worktrees
+	m.status = "created " + msg.branch
+	return m, m.loadResource()
 }
 
 // handleInputKey drives the top bar while in search or command mode.

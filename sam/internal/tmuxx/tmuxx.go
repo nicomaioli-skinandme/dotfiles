@@ -160,12 +160,37 @@ func KillSession(name string) error {
 	return err
 }
 
+// AttachCmd returns the command that attaches the controlling terminal to
+// session `name`. It is for callers that want to keep running after the
+// client exits (the TUI, via tea.ExecProcess): the returned command is run
+// as a child and blocks until the user detaches, then control returns to
+// the caller. The attached process is only a tmux *client*; the session
+// lives in the daemonized tmux server, so detaching (or the parent dying)
+// never tears the session down. Outside-tmux only — switch-client is the
+// inside-tmux equivalent (see Switch). The session must already exist
+// (built with `new-session -d`) before this client runs.
+func AttachCmd(name string) *exec.Cmd {
+	return exec.Command("tmux", "attach-session", "-t", name)
+}
+
+// Switch points the current tmux client at session `name` via
+// switch-client. It returns immediately (it does not take over the
+// terminal) and is the inside-tmux counterpart to AttachCmd.
+func Switch(name string) error {
+	_, err := tmux("switch-client", "-t", name)
+	return err
+}
+
 // SwitchOrAttach switches the current tmux client to `name` when called
 // from inside tmux ($TMUX set), otherwise attaches the controlling
 // terminal to the session. The outside-tmux branch replaces sam's
 // process image with tmux via syscall.Exec so no `sam` process lingers
 // as the parent of the tmux client — without this, `killall sam` would
 // tear down the user's attached session.
+//
+// This is the one-shot CLI path (`sam session attach`, `sam issue
+// develop`, etc.), which has nothing to return to. The TUI instead keeps
+// running across an attach and so uses AttachCmd/Switch directly.
 func SwitchOrAttach(name string) error {
 	if InTmux() {
 		_, err := tmux("switch-client", "-t", name)

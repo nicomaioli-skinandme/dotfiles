@@ -6,6 +6,9 @@
 package session
 
 import (
+	"os/exec"
+	"path/filepath"
+
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tmuxx"
 )
@@ -35,6 +38,35 @@ func (Service) Build(name string, ws *config.Workspace, baseDir string) error {
 	return tmuxx.BuildSession(name, ws, baseDir)
 }
 
+// Ensure returns the session name for the named worktree within ws,
+// building its tmux layout (detached, via Build) when the session doesn't
+// yet exist. It never attaches — callers attach afterwards (the CLI via
+// SwitchOrAttach, the TUI via AttachCmd/Switch). Because Build uses
+// `new-session -d`, the session is owned by the daemonized tmux server,
+// not by sam.
+func (s Service) Ensure(ws *config.Workspace, wsName, name string) (string, error) {
+	sess := s.Name(wsName, name)
+	if !s.Has(sess) {
+		if err := s.Build(sess, ws, baseDir(ws, name)); err != nil {
+			return "", err
+		}
+	}
+	return sess, nil
+}
+
+// AttachCmd returns the command that attaches the controlling terminal to
+// the session. It is for callers that keep running after the client exits
+// (the TUI, via tea.ExecProcess); the session must already exist.
+func (Service) AttachCmd(name string) *exec.Cmd {
+	return tmuxx.AttachCmd(name)
+}
+
+// Switch points the current tmux client at the session (inside-tmux path);
+// it returns immediately without taking over the terminal.
+func (Service) Switch(name string) error {
+	return tmuxx.Switch(name)
+}
+
 // AddClaudePane splits the configured repo window and launches Claude with
 // the rendered prompt/title. An empty prompt is a no-op.
 func (Service) AddClaudePane(name, repoWindow, prompt, title, permMode string, data ClaudeData, cwd string) error {
@@ -62,4 +94,13 @@ func (Service) Current() (string, error) {
 // InTmux reports whether sam is running inside a tmux client.
 func (Service) InTmux() bool {
 	return tmuxx.InTmux()
+}
+
+// baseDir maps a worktree name to its directory: the trunk lives at the
+// repo root, every other branch under the worktrees dir.
+func baseDir(ws *config.Workspace, name string) string {
+	if name == ws.Trunk {
+		return ws.Repo
+	}
+	return filepath.Join(ws.Worktrees, name)
 }

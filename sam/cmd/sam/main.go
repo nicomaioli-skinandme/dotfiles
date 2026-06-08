@@ -100,7 +100,7 @@ func main() {
 		Clankers:    clankerCtrl,
 		SessionSvc:  sessionSvc,
 	}
-	root.AddCommand(newMenuCmd(deps, sessionCtrl, worktreeCtrl))
+	root.AddCommand(newMenuCmd(deps))
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the build version (short commit hash)",

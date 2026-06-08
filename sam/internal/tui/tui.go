@@ -8,14 +8,19 @@
 // `:clankers`) or quits (`:q`). `<CR>` activates the highlighted row, and
 // `a`/`d` add/delete where the current resource supports it.
 //
-// The program never attaches to tmux itself: attaching replaces the
-// process image, which it cannot do while it owns the terminal. Instead
-// it records a [Result] and quits; the caller performs the attach (and
-// any deferred flow, like new-worktree or from-issue) after the program
-// has exited and released the terminal.
+// Activating a row attaches to its tmux session without ending the
+// program: the model suspends via tea.ExecProcess (outside tmux) or
+// switch-client (inside tmux), runs the tmux client as a child, and
+// resumes the same model when the user detaches — so sam stays put and
+// you land back exactly where you left it. The tmux *session* is always
+// built detached (`new-session -d`) and owned by the daemonized tmux
+// server, never by sam; only the transient attach *client* is sam's
+// child. The TUI quits (records a [Result]) only to run the workspace-add
+// wizard, which is an in-process form that can't ride tea.ExecProcess.
 package tui
 
 import (
+	"os/exec"
 	"sort"
 	"strings"
 
@@ -25,7 +30,6 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/session"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
 
@@ -41,7 +45,24 @@ type Deps struct {
 	IssueSvc    issue.Service
 	PRs         pr.Controller
 	Clankers    clanker.Controller
-	SessionSvc  session.Service
+	SessionSvc  SessionService
+}
+
+// SessionService is the slice of the session entity the TUI consumes. It
+// is declared here (consumer-side) so tests can substitute a fake instead
+// of shelling out to tmux; session.Service satisfies it. Ensure builds a
+// worktree's session if absent and returns its name (never attaching);
+// AttachCmd yields the `tmux attach-session` command the model runs as a
+// child via tea.ExecProcess (outside tmux); Switch is the inside-tmux
+// switch-client equivalent.
+type SessionService interface {
+	Name(wsName, branch string) string
+	Has(name string) bool
+	Current() (string, error)
+	InTmux() bool
+	Ensure(ws *config.Workspace, wsName, name string) (string, error)
+	AttachCmd(name string) *exec.Cmd
+	Switch(name string) error
 }
 
 // Resource is one navigable category, switched between with `:`.
@@ -122,29 +143,14 @@ type Item struct {
 	Type   WorktreeType
 }
 
-// Result is the single value the TUI hands back on exit. At most one of
-// its actions is set; an all-zero Result means "user quit, do nothing".
-// The caller performs the action after the program has released the
-// terminal (attaching replaces the process image, which the TUI can't do
-// while it owns the terminal).
-//
-// Attach names a worktree to attach to (the caller builds its session if
-// absent); AttachSession names an already-built session to attach to
-// directly (the issue/pr flows build it before exit; clankers point at an
-// existing session). At most one is set.
-//
-// Workspace + WorkspaceName carry the workspace the TUI was operating
-// on when the user picked the action — this is not necessarily the
-// workspace the menu launched with (the user may have switched via
-// `:workspaces`). Post-TUI callers MUST prefer these over their own
-// captured workspace pointer when present.
+// Result is the value the TUI hands back on exit. Attaching to a session
+// no longer goes through here — the model does that in place via
+// tea.ExecProcess and keeps running. The only thing left that must happen
+// after the program releases the terminal is the workspace-add wizard (an
+// in-process huh form that can't ride tea.ExecProcess), so RunWizard is
+// the sole field; an all-zero Result means "user quit, do nothing".
 type Result struct {
-	Attach            string            // worktree to build-if-missing and attach to
-	AttachSession     string            // already-built session to attach to directly
-	RunWizard         bool              // run `workspace add` wizard after exit
-	NewWorktreeBranch string            // run new-worktree for this branch after exit
-	Workspace         *config.Workspace // workspace active in the TUI at exit
-	WorkspaceName     string            // its key in cfg.Workspaces
+	RunWizard bool // run `workspace add` wizard after exit, then re-enter the menu
 }
 
 // Run launches the full-screen TUI against the given workspace and

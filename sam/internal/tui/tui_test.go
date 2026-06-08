@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -10,6 +11,39 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 )
+
+// fakeSession is a SessionService stand-in that records calls instead of
+// shelling out to tmux, so activation tests don't touch a real server.
+type fakeSession struct {
+	inTmux      bool
+	ensureCalls []ensureCall
+	switched    []string
+}
+
+type ensureCall struct {
+	ws     *config.Workspace
+	wsName string
+	name   string
+}
+
+func (f *fakeSession) Name(wsName, branch string) string { return wsName + "-" + branch }
+func (f *fakeSession) Has(string) bool                   { return true }
+func (f *fakeSession) Current() (string, error)          { return "", nil }
+func (f *fakeSession) InTmux() bool                      { return f.inTmux }
+
+func (f *fakeSession) Ensure(ws *config.Workspace, wsName, name string) (string, error) {
+	f.ensureCalls = append(f.ensureCalls, ensureCall{ws: ws, wsName: wsName, name: name})
+	return f.Name(wsName, name), nil
+}
+
+func (f *fakeSession) AttachCmd(name string) *exec.Cmd {
+	return exec.Command("tmux", "attach-session", "-t", name)
+}
+
+func (f *fakeSession) Switch(name string) error {
+	f.switched = append(f.switched, name)
+	return nil
+}
 
 func TestParseCommand(t *testing.T) {
 	cases := []struct {
@@ -160,8 +194,8 @@ func TestActivateIssueStartsFlow(t *testing.T) {
 	if !m.loading {
 		t.Error("expected loading to be set while preparing")
 	}
-	if m.result.Attach != "" {
-		t.Errorf("must not set a result before the flow completes, got %q", m.result.Attach)
+	if m.result != (Result{}) {
+		t.Errorf("must not set a result before the flow completes, got %+v", m.result)
 	}
 }
 
@@ -183,8 +217,8 @@ func TestActivatePRStartsFlow(t *testing.T) {
 	if !m.loading {
 		t.Error("expected loading to be set while bootstrapping")
 	}
-	if m.result.Attach != "" {
-		t.Errorf("must not set a result before the flow completes, got %q", m.result.Attach)
+	if m.result != (Result{}) {
+		t.Errorf("must not set a result before the flow completes, got %+v", m.result)
 	}
 }
 
@@ -251,32 +285,45 @@ func TestFromIssuePreparedPromptsReassign(t *testing.T) {
 	}
 }
 
-func TestActivateWorktreeRecordsAttach(t *testing.T) {
+func TestActivateWorktreeEnsuresAndAttaches(t *testing.T) {
 	ws := &config.Workspace{Trunk: "main", Repo: "/repo", Worktrees: "/wt"}
-	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{}, Deps{})
+	fs := &fakeSession{}
+	m := newModel("ws", ws, nil, ResWorktrees, config.Tui{}, Deps{SessionSvc: fs})
 	m.items = []Item{{ID: "feat-x", Title: "feat-x", Type: WorktreeLinked}}
 	m.applyFilter()
 
-	m.activate()
-	// Result carries the worktree name; the caller builds-if-missing and
-	// attaches via the session Controller after the TUI exits.
-	if m.result.Attach != "feat-x" {
-		t.Fatalf("attach: got %q, want %q", m.result.Attach, "feat-x")
+	_, cmd := m.activate()
+	if !m.loading {
+		t.Error("expected loading to be set while ensuring the session")
 	}
-	if m.result.AttachSession != "" {
-		t.Errorf("AttachSession must be empty for a worktree activation; got %q", m.result.AttachSession)
+	if cmd == nil {
+		t.Fatal("expected a command from activating a worktree")
 	}
-	if m.result.Workspace != ws || m.result.WorkspaceName != "ws" {
-		t.Errorf("result must carry the active workspace; got %v / %q",
-			m.result.Workspace, m.result.WorkspaceName)
+	// The TUI attaches in place now — it must not record a result or quit.
+	if m.result != (Result{}) {
+		t.Errorf("worktree activation must not set a result; got %+v", m.result)
+	}
+
+	// Running the ensure command builds-if-missing and reports the session.
+	msg := m.ensureSessionCmd(m.workspace, m.workspaceName, "feat-x")()
+	ready, ok := msg.(attachReadyMsg)
+	if !ok {
+		t.Fatalf("expected attachReadyMsg, got %T", msg)
+	}
+	if ready.err != nil || ready.session != "ws-feat-x" {
+		t.Fatalf("ensure: got session=%q err=%v", ready.session, ready.err)
+	}
+	if len(fs.ensureCalls) == 0 || fs.ensureCalls[len(fs.ensureCalls)-1].name != "feat-x" {
+		t.Fatalf("Ensure not called for feat-x; calls=%+v", fs.ensureCalls)
 	}
 }
 
-func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
+func TestActivateWorktreeAfterSwitchEnsuresNewWorkspace(t *testing.T) {
 	wsA := config.Workspace{Trunk: "sam-tui-test-a-main", Repo: "/a", Worktrees: "/a.wt"}
 	wsB := config.Workspace{Trunk: "sam-tui-test-b-main", Repo: "/b", Worktrees: "/b.wt"}
 	all := map[string]config.Workspace{"a": wsA, "b": wsB}
-	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{}, Deps{})
+	fs := &fakeSession{}
+	m := newModel("a", &wsA, all, ResWorktrees, config.Tui{}, Deps{SessionSvc: fs})
 
 	// Simulate the user invoking `:workspaces` and picking "b".
 	if cmd := m.switchWorkspace("b"); cmd == nil {
@@ -286,19 +333,62 @@ func TestActivateWorktreeAfterSwitchCarriesNewWorkspace(t *testing.T) {
 		t.Fatalf("after switch: name=%q repo=%q", m.workspaceName, m.workspace.Repo)
 	}
 
-	// Now pick the main worktree entry for the *switched-to* workspace.
+	// Now pick the main worktree entry for the *switched-to* workspace and
+	// run the ensure command it dispatches.
 	m.items = []Item{{ID: wsB.Trunk, Title: wsB.Trunk, Type: WorktreeMain}}
 	m.applyFilter()
-	m.activate()
+	if _, cmd := m.activate(); cmd == nil {
+		t.Fatal("expected a command from activating a worktree")
+	}
+	_ = m.ensureSessionCmd(m.workspace, m.workspaceName, wsB.Trunk)()
 
-	if m.result.WorkspaceName != "b" {
-		t.Errorf("result must carry the switched-to workspace name; got %q", m.result.WorkspaceName)
+	last := fs.ensureCalls[len(fs.ensureCalls)-1]
+	if last.wsName != "b" || last.ws == nil || last.ws.Repo != "/b" {
+		t.Errorf("Ensure must use the switched-to workspace; got wsName=%q ws=%+v", last.wsName, last.ws)
 	}
-	if m.result.Workspace == nil || m.result.Workspace.Repo != "/b" {
-		t.Errorf("result must carry the switched-to workspace pointer; got %v", m.result.Workspace)
+	if last.name != wsB.Trunk {
+		t.Errorf("Ensure must target the switched-to worktree; got %q", last.name)
 	}
-	if m.result.Attach != wsB.Trunk {
-		t.Errorf("result must attach to the switched-to worktree; got %q", m.result.Attach)
+}
+
+func TestAttachInTmuxUsesSwitch(t *testing.T) {
+	fs := &fakeSession{inTmux: true}
+	m := newModel("ws", &config.Workspace{}, nil, ResWorktrees, config.Tui{}, Deps{SessionSvc: fs})
+	m.loading = true
+
+	_, cmd := m.attachToSession("ws-feat-x")
+	if m.loading {
+		t.Error("attachToSession must clear loading")
+	}
+	if cmd == nil {
+		t.Fatal("expected a switch command inside tmux")
+	}
+	msg := cmd()
+	if _, ok := msg.(attachedMsg); !ok {
+		t.Fatalf("expected attachedMsg, got %T", msg)
+	}
+	if len(fs.switched) != 1 || fs.switched[0] != "ws-feat-x" {
+		t.Fatalf("expected switch-client to ws-feat-x; got %+v", fs.switched)
+	}
+}
+
+func TestAttachedReloadsAndKeepsCursor(t *testing.T) {
+	fs := &fakeSession{}
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{SessionSvc: fs})
+	m.items = sampleItems()
+	m.applyFilter()
+	m.cursor = 2
+	m.loading = true
+
+	_, cmd := m.handleAttached(attachedMsg{})
+	if m.loading {
+		t.Error("handleAttached must clear loading")
+	}
+	if m.cursor != 2 {
+		t.Errorf("cursor must be preserved across an attach; got %d", m.cursor)
+	}
+	if cmd == nil {
+		t.Error("handleAttached must reload the current resource")
 	}
 }
 

@@ -2,7 +2,6 @@ package session
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 )
@@ -26,11 +25,9 @@ func NewController(svc Service) Controller {
 // at ws.Repo, any other name to ws.Worktrees/<name>. It builds the layout
 // only — no Claude pane (that's the issue/pr bootstrap's job).
 func (c Controller) Attach(ws *config.Workspace, wsName, name string) error {
-	sess := c.svc.Name(wsName, name)
-	if !c.svc.Has(sess) {
-		if err := c.svc.Build(sess, ws, baseDir(ws, name)); err != nil {
-			return err
-		}
+	sess, err := c.svc.Ensure(ws, wsName, name)
+	if err != nil {
+		return err
 	}
 	return c.svc.SwitchOrAttach(sess)
 }
@@ -43,13 +40,4 @@ func (c Controller) AttachExisting(name string) error {
 		return fmt.Errorf("no tmux session %q", name)
 	}
 	return c.svc.SwitchOrAttach(name)
-}
-
-// baseDir maps a worktree name to its directory: the trunk lives at the
-// repo root, every other branch under the worktrees dir.
-func baseDir(ws *config.Workspace, name string) string {
-	if name == ws.Trunk {
-		return ws.Repo
-	}
-	return filepath.Join(ws.Worktrees, name)
 }

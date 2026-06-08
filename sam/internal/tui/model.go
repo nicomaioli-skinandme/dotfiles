@@ -123,6 +123,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionDoneMsg:
 		return m.handleActionDone(msg)
 
+	case attachReadyMsg:
+		return m.handleAttachReady(msg)
+
+	case attachedMsg:
+		return m.handleAttached(msg)
+
+	case worktreeAddedMsg:
+		return m.handleWorktreeAdded(msg)
+
 	case fromIssuePreparedMsg:
 		return m.handleFromIssuePrepared(msg)
 
