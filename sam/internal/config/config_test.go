@@ -308,3 +308,31 @@ cwd  = "."
 		t.Errorf("error should mention field and value: %v", err)
 	}
 }
+
+func TestSchemaIssues_CollectsAll(t *testing.T) {
+	// One config carrying several independent problems: SchemaIssues should
+	// surface all of them at once (unlike Load, which stops at the first).
+	cfg := &Config{
+		Tui: Tui{Colors: Colors{Primary: "notacolor"}},
+		Workspaces: map[string]Workspace{
+			"a": {Repo: "/x", Worktrees: "/y"},    // missing trunk
+			"b": {Worktrees: "/y", Trunk: "main"}, // missing repo
+		},
+	}
+	issues := SchemaIssues(cfg)
+	for _, want := range []string{"tui.colors.primary", `workspace "a": trunk`, `workspace "b": repo`} {
+		found := false
+		for _, got := range issues {
+			if strings.Contains(got, want) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("issues %v should contain %q", issues, want)
+		}
+	}
+	if len(issues) < 3 {
+		t.Errorf("expected at least 3 issues, got %d: %v", len(issues), issues)
+	}
+}

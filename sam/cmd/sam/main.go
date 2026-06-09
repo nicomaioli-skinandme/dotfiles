@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -22,8 +21,6 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/session"
 	sessioncli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/session/cli"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ui"
-	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace"
 	workspacecli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace/cli"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
@@ -130,11 +127,6 @@ func main() {
 // the user at --workspace. The interactive menu uses
 // loadWorkspaceAndConfig directly so it can open the workspace-select
 // view in that case.
-//
-// First-run side effect: when ~/.config/sam/config.toml is missing,
-// runs the setup wizard, saves the result, and re-execs `sam` with
-// no arguments so the user lands in a clean menu. This call does not
-// return in that case.
 func loadWorkspace() (string, *config.Workspace, error) {
 	name, ws, cfg, err := loadWorkspaceAndConfig()
 	if err != nil {
@@ -160,18 +152,19 @@ func workspaceNames(cfg *config.Config) string {
 // config. A nil ws with a nil err means "no workspace selected; ask
 // the user." Non-menu callers should go through loadWorkspace
 // instead, which surfaces an error in that case.
+//
+// A missing config file is an error here (the CLI is non-interactive);
+// the menu handles first-run setup itself before calling this, so it
+// never hits that path.
 func loadWorkspaceAndConfig() (string, *config.Workspace, *config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return "", nil, nil, err
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := runFirstRunWizard(path); err != nil {
-			return "", nil, nil, err
-		}
-		// runFirstRunWizard either re-execs (no return) or returns
-		// nil after the user cancelled, in which case we exit.
-		os.Exit(0)
+		return "", nil, nil, fmt.Errorf(
+			"no config at %s — run `sam` to set up a workspace, or hand-write the file (see `sam config doctor`)",
+			path)
 	} else if err != nil {
 		return "", nil, nil, err
 	}
@@ -188,29 +181,6 @@ func loadWorkspaceAndConfig() (string, *config.Workspace, *config.Config, error)
 		return "", nil, cfg, nil
 	}
 	return active.Name, active.WS, cfg, nil
-}
-
-func runFirstRunWizard(path string) error {
-	fmt.Fprintln(os.Stderr, "sam: no config at "+path+" — launching setup wizard.")
-	cfg, err := wizard.Run(nil)
-	if err != nil {
-		if errors.Is(err, ui.ErrCancelled) {
-			return nil
-		}
-		return err
-	}
-	if err := config.Save(cfg, path); err != nil {
-		return err
-	}
-	fmt.Fprintln(os.Stderr, "Wrote "+path)
-	// Re-exec `sam` with no args so the user lands in a clean menu,
-	// as if they had just invoked sam fresh. Whatever they originally
-	// typed (e.g. `sam from-issue`) is intentionally discarded.
-	bin, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	return syscall.Exec(bin, []string{"sam"}, os.Environ())
 }
 
 func version() string {

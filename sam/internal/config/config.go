@@ -3,13 +3,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -134,25 +137,42 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".config", "sam", "config.toml"), nil
 }
 
-// Load reads, unmarshals, expands `~`, and validates the config at path.
-func Load(path string) (*Config, error) {
+// Decode reads, unmarshals, and expands `~` in the config at path, WITHOUT
+// validating or applying defaults. unknown lists any config keys that don't
+// map to the schema (a strict-decode check viper skips by default). It is
+// the raw-parse seam `sam config doctor` builds on; normal callers use Load.
+func Decode(path string) (cfg *Config, unknown []string, err error) {
 	v := viper.New()
 	v.SetConfigFile(path)
 	v.SetConfigType("toml")
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
+		return nil, nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
-	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
+	var c Config
+	var md mapstructure.Metadata
+	if err := v.Unmarshal(&c, func(dc *mapstructure.DecoderConfig) {
+		dc.Metadata = &md
+	}); err != nil {
+		return nil, nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 
-	if err := expandPaths(&cfg); err != nil {
+	if err := expandPaths(&c); err != nil {
+		return nil, nil, err
+	}
+	return &c, md.Unused, nil
+}
+
+// Load reads, unmarshals, expands `~`, and validates the config at path.
+// Unknown keys are tolerated (use Decode / `sam config doctor` to surface
+// them); only schema violations are fatal.
+func Load(path string) (*Config, error) {
+	cfg, _, err := Decode(path)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := validate(&cfg); err != nil {
+	if err := validate(cfg); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +191,7 @@ func Load(path string) (*Config, error) {
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = DefaultLogLevel
 	}
-	return &cfg, nil
+	return cfg, nil
 }
 
 // ParseLogLevel maps a config/flag level name to a slog.Level. It accepts
@@ -247,68 +267,83 @@ func expandHome(path, home string) string {
 }
 
 func validate(cfg *Config) error {
+	if iss := SchemaIssues(cfg); len(iss) > 0 {
+		return errors.New(iss[0])
+	}
+	return nil
+}
+
+// SchemaIssues reports every schema-level problem with cfg as a slice of
+// human-readable messages, in a stable order (workspaces and color fields
+// sorted by name). It is the collect-all counterpart of the fail-fast
+// validate that Load runs; `sam config doctor` uses it to surface all
+// problems at once. It performs no I/O — filesystem and network checks live
+// in the doctor package.
+func SchemaIssues(cfg *Config) []string {
+	var issues []string
+
 	if len(cfg.Workspaces) == 0 {
-		return fmt.Errorf("no workspaces configured")
+		issues = append(issues, "no workspaces configured")
 	}
 
 	if cfg.Tui.Autocomplete.Max < 0 {
-		return fmt.Errorf("tui.autocomplete.max must be >= 0")
+		issues = append(issues, "tui.autocomplete.max must be >= 0")
 	}
 
 	if cfg.Log.Level != "" {
 		if _, err := ParseLogLevel(cfg.Log.Level); err != nil {
-			return fmt.Errorf("log.level: %w", err)
+			issues = append(issues, fmt.Sprintf("log.level: %v", err))
 		}
 	}
 
-	for field, val := range map[string]string{
-		"primary":    cfg.Tui.Colors.Primary,
-		"secondary":  cfg.Tui.Colors.Secondary,
-		"destroy":    cfg.Tui.Colors.Destroy,
-		"foreground": cfg.Tui.Colors.Foreground,
-		"background": cfg.Tui.Colors.Background,
+	for _, c := range []struct{ field, val string }{
+		{"primary", cfg.Tui.Colors.Primary},
+		{"secondary", cfg.Tui.Colors.Secondary},
+		{"destroy", cfg.Tui.Colors.Destroy},
+		{"foreground", cfg.Tui.Colors.Foreground},
+		{"background", cfg.Tui.Colors.Background},
 	} {
-		if !validColor(val) {
-			return fmt.Errorf("tui.colors.%s %q: must be an ANSI index 0-255, a #hex color, or empty", field, val)
+		if !validColor(c.val) {
+			issues = append(issues, fmt.Sprintf(
+				"tui.colors.%s %q: must be an ANSI index 0-255, a #hex color, or empty", c.field, c.val))
 		}
 	}
 
-	for name, w := range cfg.Workspaces {
+	names := make([]string, 0, len(cfg.Workspaces))
+	for name := range cfg.Workspaces {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		w := cfg.Workspaces[name]
 		if w.Repo == "" {
-			return fmt.Errorf("workspace %q: repo is required", name)
+			issues = append(issues, fmt.Sprintf("workspace %q: repo is required", name))
 		}
 		if w.Worktrees == "" {
-			return fmt.Errorf("workspace %q: worktrees is required", name)
+			issues = append(issues, fmt.Sprintf("workspace %q: worktrees is required", name))
 		}
 		if w.Trunk == "" {
-			return fmt.Errorf("workspace %q: trunk is required", name)
+			issues = append(issues, fmt.Sprintf("workspace %q: trunk is required", name))
 		}
-		if w.FromIssue.RepoWindow != "" {
-			found := false
-			for _, win := range w.Tmux.Windows {
-				if win.Name == w.FromIssue.RepoWindow {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("workspace %q: from_issue.repo_window %q does not match any tmux window",
-					name, w.FromIssue.RepoWindow)
-			}
+		if w.FromIssue.RepoWindow != "" && !hasWindow(w, w.FromIssue.RepoWindow) {
+			issues = append(issues, fmt.Sprintf(
+				"workspace %q: from_issue.repo_window %q does not match any tmux window",
+				name, w.FromIssue.RepoWindow))
 		}
-		if w.FromPR.RepoWindow != "" {
-			found := false
-			for _, win := range w.Tmux.Windows {
-				if win.Name == w.FromPR.RepoWindow {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("workspace %q: from_pr.repo_window %q does not match any tmux window",
-					name, w.FromPR.RepoWindow)
-			}
+		if w.FromPR.RepoWindow != "" && !hasWindow(w, w.FromPR.RepoWindow) {
+			issues = append(issues, fmt.Sprintf(
+				"workspace %q: from_pr.repo_window %q does not match any tmux window",
+				name, w.FromPR.RepoWindow))
 		}
 	}
-	return nil
+	return issues
+}
+
+func hasWindow(w Workspace, name string) bool {
+	for _, win := range w.Tmux.Windows {
+		if win.Name == name {
+			return true
+		}
+	}
+	return false
 }

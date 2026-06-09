@@ -165,7 +165,7 @@ type Item struct {
 // in-process huh form that can't ride tea.ExecProcess), so RunWizard is
 // the sole field; an all-zero Result means "user quit, do nothing".
 type Result struct {
-	RunWizard bool // run `workspace add` wizard after exit, then re-enter the menu
+	RunWizard bool // run the workspace-setup wizard after exit, then re-enter the menu
 }
 
 // Run launches the full-screen TUI against the given workspace and

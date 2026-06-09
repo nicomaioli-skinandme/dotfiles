@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
-	workspacecli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace/cli"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
 )
 
 func newMenuCmd(deps tui.Deps) *cobra.Command {
@@ -29,7 +30,20 @@ func newMenuCmd(deps tui.Deps) *cobra.Command {
 // when the user quits or asks to add a workspace. The latter runs the huh
 // wizard — an in-process form the TUI can't suspend into — then re-enters
 // the menu.
+//
+// The menu is also the sole launcher of the first-run setup wizard: when no
+// config exists yet, it runs the wizard before resolving (the CLI verbs stay
+// non-interactive and error instead — see loadWorkspaceAndConfig). A
+// cancelled first run leaves no config and exits cleanly.
 func runMenu(deps tui.Deps, start tui.Resource) error {
+	ready, err := ensureFirstRun()
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return nil // first-run wizard cancelled — nothing to show
+	}
+
 	name, ws, cfg, err := loadWorkspaceAndConfig()
 	if err != nil {
 		return err
@@ -59,13 +73,40 @@ func runMenu(deps tui.Deps, start tui.Resource) error {
 
 	if res.RunWizard {
 		// The wizard owns the terminal; run it, then drop back into the menu.
-		if err := workspacecli.RunAddWizard(os.Stdout); err != nil {
+		if err := wizard.AddWorkspace(os.Stdout); err != nil {
 			return err
 		}
 		return runMenu(deps, tui.ResWorkspaces)
 	}
 
 	return nil // user quit
+}
+
+// ensureFirstRun launches the setup wizard when no config exists yet, and
+// reports whether a config is present afterward. The menu is the only place
+// that runs the wizard; CLI verbs error on a missing config instead (see
+// loadWorkspaceAndConfig). A cancelled wizard leaves no file and returns
+// false, so the caller exits cleanly without opening the TUI.
+func ensureFirstRun() (bool, error) {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if err := wizard.AddWorkspace(os.Stdout); err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return true, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else {
+		return false, err
+	}
 }
 
 // resolveLogLevel picks the minimum log level, preferring the --log-level

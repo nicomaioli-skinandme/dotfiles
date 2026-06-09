@@ -6,6 +6,7 @@ package wizard
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -174,6 +175,39 @@ func Run(existing *config.Config) (*config.Config, error) {
 
 	cfg.Workspaces[name] = ws
 	return cfg, nil
+}
+
+// AddWorkspace loads any existing config, runs the guided wizard to append a
+// workspace, and saves, reporting the written path to w. A cancelled wizard
+// is a no-op (returns nil, leaving the config untouched). It is the sole
+// entry point for the interactive setup flow: the menu drives it both on
+// first run (no config file yet) and from the workspaces view (`a`).
+func AddWorkspace(w io.Writer) error {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return err
+	}
+	var existing *config.Config
+	if _, statErr := os.Stat(path); statErr == nil {
+		existing, err = config.Load(path)
+		if err != nil {
+			return err
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
+	updated, err := Run(existing)
+	if err != nil {
+		if errors.Is(err, ui.ErrCancelled) {
+			return nil
+		}
+		return err
+	}
+	if err := config.Save(updated, path); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "Wrote %s\n", path)
+	return nil
 }
 
 func collectGhProject(branchRepo string) (config.GhProject, error) {
