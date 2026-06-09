@@ -237,7 +237,7 @@ func (m *model) renderStatusBar() string {
 	}
 
 	count := fmt.Sprintf("%d items", len(m.filtered))
-	right := badge + m.styles.hint.Render(count + "   ? help ")
+	right := badge + m.styles.hint.Render(count+"   ? help ")
 
 	// The status bar must stay exactly one row: renderBody reserves only
 	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)

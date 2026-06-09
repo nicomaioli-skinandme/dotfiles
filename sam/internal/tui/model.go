@@ -47,11 +47,11 @@ type model struct {
 	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
 	pending *fromIssueState        // in-flight from-issue flow, if any
 
-	log         *slog.Logger        // diagnostic sink (never nil; discards when unset)
-	ring        *logx.Ring          // in-memory log buffer the `:logs` view reads (may be nil)
-	logPath     string              // temp file the logger tees to (shown in the logs empty state)
+	log         *slog.Logger          // diagnostic sink (never nil; discards when unset)
+	ring        *logx.Ring            // in-memory log buffer the `:logs` view reads (may be nil)
+	logPath     string                // temp file the logger tees to (shown in the logs empty state)
 	logEntries  map[string]logx.Entry // entries backing the current logs list, keyed by Item.ID
-	logsSeenSeq int                 // ring Seq last shown in the logs view (badge baseline)
+	logsSeenSeq int                   // ring Seq last shown in the logs view (badge baseline)
 
 	mode   inputMode
 	input  textinput.Model
