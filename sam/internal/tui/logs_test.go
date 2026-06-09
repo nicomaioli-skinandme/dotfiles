@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
@@ -109,6 +110,24 @@ func TestLoadErrorIsLogged(t *testing.T) {
 	}
 	if entries[0].Level != slog.LevelError || entries[0].Detail != "gh: HTTP 401" {
 		t.Errorf("logged entry = %+v, want ERROR with full detail", entries[0])
+	}
+}
+
+func TestUnseenBadge(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelInfo, "")
+	logger.Warn("w", "err", errors.New("x"))
+	logger.Error("e", "err", errors.New("y"))
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
+	m.width, m.height = 80, 24
+
+	if bar := m.renderStatusBar(); !strings.Contains(bar, "⚠ 2") {
+		t.Errorf("status bar missing unseen badge: %q", bar)
+	}
+
+	// Marking everything seen (as opening :logs does) clears the badge.
+	m.logsSeenSeq = ring.MaxSeq()
+	if bar := m.renderStatusBar(); strings.Contains(bar, "⚠") {
+		t.Errorf("badge should clear once seen: %q", bar)
 	}
 }
 

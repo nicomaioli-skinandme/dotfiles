@@ -224,8 +224,20 @@ func (m *model) renderStatusBar() string {
 	}
 	left := m.styles.breadcrumb.Render(crumb)
 
+	// Badge unseen warnings/errors (entries logged since the logs view was
+	// last opened) so failures are noticed without watching the status line.
+	// Destroy palette when any are errors, primary for warnings only.
+	badge := ""
+	if unseen := m.ring.CountSince(slog.LevelWarn, m.logsSeenSeq); unseen > 0 {
+		style := m.styles.active
+		if m.ring.CountSince(slog.LevelError, m.logsSeenSeq) > 0 {
+			style = m.styles.deleting
+		}
+		badge = style.Render(fmt.Sprintf("⚠ %d", unseen)) + "   "
+	}
+
 	count := fmt.Sprintf("%d items", len(m.filtered))
-	right := m.styles.hint.Render(count + "   ? help ")
+	right := badge + m.styles.hint.Render(count + "   ? help ")
 
 	// The status bar must stay exactly one row: renderBody reserves only
 	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)
