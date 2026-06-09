@@ -69,10 +69,13 @@ them into `$HOME`. `chezmoi managed` lists what's tracked. The
 whenever any tracked file under `sam/` changes. Invoke it directly — no
 shell alias needed.
 
-Configuration lives at `~/.config/sam/config.toml`. The file is owned
-by `sam` itself: on first run (or `sam workspace add`) an interactive
-wizard creates and writes it. Edit the file by hand for layout-level
-changes (tmux windows, prompt templates).
+Configuration lives at `~/.config/sam/config.toml`. The first time you
+run `sam` (the menu) on a machine with no config, an interactive wizard
+creates and writes it; add further workspaces from the menu's workspaces
+view (`a`). The wizard is menu-only — the non-interactive CLI never
+prompts. The programmatic path is hand-writing the file; validate it with
+`sam config doctor`. Edit by hand for layout-level changes (tmux windows,
+prompt templates) too.
 
 ## tmux plugins (tpm)
 
@@ -135,15 +138,23 @@ if it doesn't exist yet.
 
 Lists running `claude` processes with their tmux session and cwd.
 
-## `sam workspace add` / `list`
+## `sam workspace list`
 
-`add` is an interactive wizard that appends a new workspace to
-`~/.config/sam/config.toml`. Auto-detects the repo path, main branch,
+Shows the configured workspaces. Adding a workspace is a menu action,
+not a CLI command: open `sam`, go to the workspaces view, and press `a`
+to launch the guided wizard. It auto-detects the repo path, main branch,
 and origin slug; offers to wire up a GitHub Project (by URL) and an
-optional post-worktree setup hook; validates `gh` scopes before
+optional post-worktree setup hook; and validates `gh` scopes before
 writing. The same wizard runs automatically the first time `sam` is
-invoked on a machine with no config file. `list` shows the configured
-workspaces.
+invoked on a machine with no config file.
+
+## `sam config doctor`
+
+Validates `~/.config/sam/config.toml` and prints every problem it finds
+— unknown keys, schema violations, repos that aren't git repositories,
+worktrees parents that don't exist, missing `gh` scopes, and
+unresolvable GitHub Projects — without changing anything. Exits non-zero
+when any are found, so it doubles as a check for hand-edited configs.
 
 When a workspace has `worktree_setup` configured (a shell command
 string), it runs after `git worktree add` and before the tmux session
