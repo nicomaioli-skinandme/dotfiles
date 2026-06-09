@@ -71,7 +71,7 @@ func (m *model) renderBody() string {
 		return pad(fmt.Sprintf("  %s loading %s…", m.spinner.View(), what), m.width, h)
 	}
 
-	// Empty main list: fall back to a sidebar of resources plus a hint.
+	// Empty main list: show a centered empty-state hint.
 	if len(m.filtered) == 0 {
 		return m.renderEmpty(h)
 	}
@@ -181,19 +181,10 @@ func (m *model) logLevelStyle(l slog.Level) lipgloss.Style {
 	}
 }
 
-// renderEmpty is the sidebar fallback: a resource switcher on the left,
-// an empty-state message on the right.
+// renderEmpty centers an empty-state hint when the current list has no
+// rows: a short message plus a navigation hint (or, for logs, the path
+// the log is being written to).
 func (m *model) renderEmpty(h int) string {
-	rows := []string{m.styles.sidebarTitle.Render("RESOURCES"), ""}
-	for _, r := range resources {
-		name := "  " + r.Name()
-		if r == m.resource && !m.branchPick {
-			name = m.styles.sidebarActive.Render("▸ " + r.Name())
-		}
-		rows = append(rows, name)
-	}
-	sidebar := lipgloss.NewStyle().Width(16).Render(strings.Join(rows, "\n"))
-
 	msg := "no items"
 	hint := "press : to switch resource"
 	switch {
@@ -206,9 +197,7 @@ func (m *model) renderEmpty(h int) string {
 		}
 	}
 	body := m.styles.hint.Render(msg + "\n\n" + hint)
-	main := lipgloss.Place(m.width-16, h, lipgloss.Center, lipgloss.Center, body)
-
-	return pad(lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main), m.width, h)
+	return pad(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, body), m.width, h)
 }
 
 func (m *model) renderStatusBar() string {

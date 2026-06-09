@@ -15,22 +15,20 @@ import (
 // the terminal default for body text. Many former styles that each had their
 // own color now share one of these three.
 type styles struct {
-	divider       lipgloss.Style // list/section rules
-	hint          lipgloss.Style // faint help text
-	cursor        lipgloss.Style // the ▸ row pointer + its title
-	selected      lipgloss.Style // multi-select ✓
-	row           lipgloss.Style // an unselected row title
-	active        lipgloss.Style // running-session ● bullet
-	detail        lipgloss.Style // trailing "(detail)" text
-	breadcrumb    lipgloss.Style // status-bar workspace › scope
-	statusInfo    lipgloss.Style // transient status message
-	sidebarTitle  lipgloss.Style // empty-state sidebar heading
-	sidebarActive lipgloss.Style // selected sidebar resource
-	modalBorder   lipgloss.Style // dialog frame
-	modalAffirm   lipgloss.Style // an inactive Yes/No button
-	modalActive   lipgloss.Style // the highlighted button (non-destructive)
-	modalDestroy  lipgloss.Style // the highlighted button on a destructive confirm
-	deleting      lipgloss.Style // the "deleting…" row indicator
+	divider      lipgloss.Style // list/section rules
+	hint         lipgloss.Style // faint help text
+	cursor       lipgloss.Style // the ▸ row pointer + its title
+	selected     lipgloss.Style // multi-select ✓
+	row          lipgloss.Style // an unselected row title
+	active       lipgloss.Style // running-session ● bullet
+	detail       lipgloss.Style // trailing "(detail)" text
+	breadcrumb   lipgloss.Style // status-bar workspace › scope
+	statusInfo   lipgloss.Style // transient status message
+	modalBorder  lipgloss.Style // dialog frame
+	modalAffirm  lipgloss.Style // an inactive Yes/No button
+	modalActive  lipgloss.Style // the highlighted button (non-destructive)
+	modalDestroy lipgloss.Style // the highlighted button on a destructive confirm
+	deleting     lipgloss.Style // the "deleting…" row indicator
 
 	// Autocomplete popup styles, copied onto the autocomplete struct.
 	acSelected lipgloss.Style // the cursor row
@@ -56,17 +54,15 @@ func newStyles(c config.Colors) styles {
 	}
 
 	return styles{
-		divider:       base.Foreground(secondary),
-		hint:          base.Foreground(secondary),
-		cursor:        base.Foreground(primary).Bold(true),
-		selected:      base.Foreground(primary),
-		row:           base,
-		active:        base.Foreground(primary),
-		detail:        base.Foreground(secondary),
-		breadcrumb:    base.Foreground(primary).Bold(true),
-		statusInfo:    base.Foreground(primary),
-		sidebarTitle:  base.Foreground(secondary).Bold(true),
-		sidebarActive: base.Foreground(primary).Bold(true),
+		divider:    base.Foreground(secondary),
+		hint:       base.Foreground(secondary),
+		cursor:     base.Foreground(primary).Bold(true),
+		selected:   base.Foreground(primary),
+		row:        base,
+		active:     base.Foreground(primary),
+		detail:     base.Foreground(secondary),
+		breadcrumb: base.Foreground(primary).Bold(true),
+		statusInfo: base.Foreground(primary),
 		modalBorder: base.
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(primary).
