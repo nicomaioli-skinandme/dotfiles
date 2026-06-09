@@ -333,6 +333,8 @@ func (m *model) helpText() string {
 		lines = append(lines, "", "  enter     switch workspace", "  a         add workspace")
 	case m.resource == ResPRs:
 		lines = append(lines, "", "  enter     create worktree from PR")
+	case m.resource == ResLogs:
+		lines = append(lines, "", "  enter     view full entry")
 	}
 	return strings.Join(lines, "\n")
 }

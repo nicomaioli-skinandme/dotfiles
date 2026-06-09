@@ -65,3 +65,7 @@ Two annotations appear on entries:
   branch picker since it already lives in the main worktree.
 - **clanker** — a running Claude process, often inside a tmux pane.
   Listed by `sam clanker list`.
+- **log** / **logs** — sam's own diagnostic record for a menu session:
+  the errors, warnings, and activity shown in the `:logs` view (and teed
+  to a temp file). Unrelated to **`git log`** (commit history); when the
+  commit history is meant, say so explicitly.
