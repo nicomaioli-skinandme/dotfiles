@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,7 +16,18 @@ import (
 type Config struct {
 	Workspaces map[string]Workspace `mapstructure:"workspaces" toml:"workspaces"`
 	Tui        Tui                  `mapstructure:"tui" toml:"tui,omitempty"`
+	Log        Log                  `mapstructure:"log" toml:"log,omitempty"`
 }
+
+// Log configures sam's diagnostic logging (the `:logs` view and the
+// temp-file tee). Level is the minimum level emitted: debug, info, warn,
+// or error (case-insensitive); empty falls back to DefaultLogLevel.
+type Log struct {
+	Level string `mapstructure:"level" toml:"level,omitempty"`
+}
+
+// DefaultLogLevel is applied when [log] level is unset.
+const DefaultLogLevel = "info"
 
 // Tui holds settings for the interactive menu (the `sam menu` TUI), as
 // opposed to per-workspace configuration.
@@ -156,7 +168,20 @@ func Load(path string) (*Config, error) {
 	if cfg.Tui.Colors.Destroy == "" {
 		cfg.Tui.Colors.Destroy = DefaultColorDestroy
 	}
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = DefaultLogLevel
+	}
 	return &cfg, nil
+}
+
+// ParseLogLevel maps a config/flag level name to a slog.Level. It accepts
+// the slog vocabulary (debug/info/warn/error) case-insensitively.
+func ParseLogLevel(s string) (slog.Level, error) {
+	var l slog.Level
+	if err := l.UnmarshalText([]byte(strings.ToUpper(strings.TrimSpace(s)))); err != nil {
+		return 0, fmt.Errorf("invalid log level %q: want debug, info, warn, or error", s)
+	}
+	return l, nil
 }
 
 // Default returns a Workspace with sensible defaults for the fields the
@@ -228,6 +253,12 @@ func validate(cfg *Config) error {
 
 	if cfg.Tui.Autocomplete.Max < 0 {
 		return fmt.Errorf("tui.autocomplete.max must be >= 0")
+	}
+
+	if cfg.Log.Level != "" {
+		if _, err := ParseLogLevel(cfg.Log.Level); err != nil {
+			return fmt.Errorf("log.level: %w", err)
+		}
 	}
 
 	for field, val := range map[string]string{

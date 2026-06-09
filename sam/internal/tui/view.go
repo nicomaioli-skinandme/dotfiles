@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -105,6 +106,10 @@ func (m *model) renderList(h int) string {
 }
 
 func (m *model) renderRow(it Item, isCursor bool) string {
+	if m.resource == ResLogs {
+		return m.renderLogRow(it, isCursor)
+	}
+
 	cursor := "  "
 	if isCursor {
 		cursor = m.styles.cursor.Render("▸ ")
@@ -137,6 +142,45 @@ func (m *model) renderRow(it Item, isCursor bool) string {
 	return truncate(line, m.width)
 }
 
+// renderLogRow draws a `:logs` row: a faint timestamp, a severity-coloured
+// level, and the message. The full detail is shown in the detail modal on
+// activate. The entry is looked up by Item.ID (filtering reorders rows, so
+// the slice index is unreliable).
+func (m *model) renderLogRow(it Item, isCursor bool) string {
+	cursor := "  "
+	if isCursor {
+		cursor = m.styles.cursor.Render("▸ ")
+	}
+
+	e := m.logEntries[it.ID]
+	ts := m.styles.detail.Render(e.Time.Format("15:04:05"))
+	level := m.logLevelStyle(e.Level).Render(fmt.Sprintf("%-5s", e.Level.String()))
+
+	msg := it.Title
+	if isCursor {
+		msg = m.styles.cursor.Render(msg)
+	} else {
+		msg = m.styles.row.Render(msg)
+	}
+
+	return truncate(fmt.Sprintf("%s%s %s  %s", cursor, ts, level, msg), m.width)
+}
+
+// logLevelStyle maps a log level to a palette style: ERROR→destroy,
+// WARN→primary, INFO→body, DEBUG→faint.
+func (m *model) logLevelStyle(l slog.Level) lipgloss.Style {
+	switch {
+	case l >= slog.LevelError:
+		return m.styles.deleting
+	case l >= slog.LevelWarn:
+		return m.styles.active
+	case l >= slog.LevelInfo:
+		return m.styles.row
+	default:
+		return m.styles.hint
+	}
+}
+
 // renderEmpty is the sidebar fallback: a resource switcher on the left,
 // an empty-state message on the right.
 func (m *model) renderEmpty(h int) string {
@@ -151,10 +195,17 @@ func (m *model) renderEmpty(h int) string {
 	sidebar := lipgloss.NewStyle().Width(16).Render(strings.Join(rows, "\n"))
 
 	msg := "no items"
-	if m.branchPick {
+	hint := "press : to switch resource"
+	switch {
+	case m.branchPick:
 		msg = "no branches available"
+	case m.resource == ResLogs:
+		msg = "no log entries yet"
+		if m.logPath != "" {
+			hint = "writing to " + m.logPath
+		}
 	}
-	body := m.styles.hint.Render(msg + "\n\npress : to switch resource")
+	body := m.styles.hint.Render(msg + "\n\n" + hint)
 	main := lipgloss.Place(m.width-16, h, lipgloss.Center, lipgloss.Center, body)
 
 	return pad(lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main), m.width, h)
@@ -173,8 +224,20 @@ func (m *model) renderStatusBar() string {
 	}
 	left := m.styles.breadcrumb.Render(crumb)
 
+	// Badge unseen warnings/errors (entries logged since the logs view was
+	// last opened) so failures are noticed without watching the status line.
+	// Destroy palette when any are errors, primary for warnings only.
+	badge := ""
+	if unseen := m.ring.CountSince(slog.LevelWarn, m.logsSeenSeq); unseen > 0 {
+		style := m.styles.active
+		if m.ring.CountSince(slog.LevelError, m.logsSeenSeq) > 0 {
+			style = m.styles.deleting
+		}
+		badge = style.Render(fmt.Sprintf("⚠ %d", unseen)) + "   "
+	}
+
 	count := fmt.Sprintf("%d items", len(m.filtered))
-	right := m.styles.hint.Render(count + "   ? help ")
+	right := badge + m.styles.hint.Render(count+"   ? help ")
 
 	// The status bar must stay exactly one row: renderBody reserves only
 	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)
@@ -206,6 +269,16 @@ func (m *model) renderModal() string {
 	switch m.modal.kind {
 	case modalHelp:
 		return m.styles.modalBorder.Render(m.helpText())
+	case modalDetail:
+		body := lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.modal.title,
+			"",
+			m.modal.viewport.View(),
+			"",
+			m.styles.hint.Render("↑/↓ scroll · esc close"),
+		)
+		return m.styles.modalBorder.Render(body)
 	case modalInput:
 		body := lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -260,6 +333,8 @@ func (m *model) helpText() string {
 		lines = append(lines, "", "  enter     switch workspace", "  a         add workspace")
 	case m.resource == ResPRs:
 		lines = append(lines, "", "  enter     create worktree from PR")
+	case m.resource == ResLogs:
+		lines = append(lines, "", "  enter     view full entry")
 	}
 	return strings.Join(lines, "\n")
 }

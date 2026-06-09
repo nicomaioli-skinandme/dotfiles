@@ -1,10 +1,13 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
 	workspacecli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace/cli"
 )
@@ -39,6 +42,16 @@ func runMenu(deps tui.Deps, start tui.Resource) error {
 		start = tui.ResWorkspaces
 	}
 
+	// Wire the session logger: a level resolved from flag/env/config, teed
+	// to a per-pid temp file and an in-memory ring the `:logs` view reads.
+	level := resolveLogLevel(cfg.Log.Level)
+	logPath := logx.DefaultPath()
+	logger, ring, closeLog := logx.New(level, logPath)
+	defer closeLog()
+	deps.Logger = logger
+	deps.LogRing = ring
+	deps.LogPath = logPath
+
 	res, err := tui.Run(name, ws, cfg.Workspaces, start, cfg.Tui, deps)
 	if err != nil {
 		return err
@@ -53,6 +66,22 @@ func runMenu(deps tui.Deps, start tui.Resource) error {
 	}
 
 	return nil // user quit
+}
+
+// resolveLogLevel picks the minimum log level, preferring the --log-level
+// flag, then $SAM_LOG_LEVEL, then the config value (already defaulted by
+// config.Load), then DefaultLogLevel. Unparseable flag/env values are
+// skipped rather than fatal — logging config should never block the menu.
+func resolveLogLevel(cfgLevel string) slog.Level {
+	for _, candidate := range []string{logLevelFlag, os.Getenv("SAM_LOG_LEVEL"), cfgLevel, config.DefaultLogLevel} {
+		if candidate == "" {
+			continue
+		}
+		if l, err := config.ParseLogLevel(candidate); err == nil {
+			return l
+		}
+	}
+	return slog.LevelInfo
 }
 
 // shouldDefaultToMenu reports whether `sam` was invoked with no
@@ -75,7 +104,7 @@ func shouldDefaultToMenu(args []string) bool {
 			// Flags that take a detached value consume the next arg, so it
 			// isn't mistaken for a subcommand. Attached forms (--flag=v,
 			// -ov) are single args and fall through the continue below.
-			if a == "--workspace" || a == "--output" || a == "-o" {
+			if a == "--workspace" || a == "--output" || a == "-o" || a == "--log-level" {
 				skipNext = true
 			}
 			continue

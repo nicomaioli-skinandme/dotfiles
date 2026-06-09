@@ -3,10 +3,12 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
@@ -20,6 +22,7 @@ type itemsLoadedMsg struct {
 	items      []Item
 	issues     map[string]issue.Issue // resolved issues, keyed by Item.ID (ResIssues only)
 	prs        map[string]pr.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
+	logs       map[string]logx.Entry  // log entries, keyed by Item.ID (ResLogs only)
 	status     string                 // non-fatal note shown in the status line (e.g. "no issues")
 	err        error
 }
@@ -42,6 +45,8 @@ func (m *model) loadResource() tea.Cmd {
 	case ResClankers:
 		m.loading = true
 		return tea.Batch(m.spinner.Tick, m.loadClankers())
+	case ResLogs:
+		return m.loadLogs()
 	}
 	return nil
 }
@@ -54,10 +59,15 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	m.loading = false
 	m.status = msg.status
 	if msg.err != nil {
-		// Surface load failures in the status line and keep the TUI usable
-		// (switch to another resource, quit) rather than aborting. The error
-		// is kept generic on purpose — raw gh/git output is multiline and
-		// would overflow the status bar; richer error surfacing comes later.
+		// Keep the status line generic — raw gh/git output is multiline and
+		// would overflow the one-row bar — but log the full error so it's
+		// visible in the `:logs` view. The TUI stays usable (switch resource,
+		// quit) rather than aborting.
+		label := "load " + m.resource.Name()
+		if m.branchPick {
+			label = "load branches"
+		}
+		m.log.Error(label, "err", msg.err)
 		if m.resource == ResIssues || m.resource == ResPRs {
 			m.status = "gh errored"
 		} else {
@@ -66,9 +76,20 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 		m.items = nil
 	} else {
 		m.items = msg.items
+		// Skip the breadcrumb for the logs view itself, so opening `:logs`
+		// doesn't append a self-referential entry.
+		if m.resource != ResLogs {
+			m.log.Debug("loaded", "resource", m.resource.Name(), "n", len(msg.items))
+		}
 	}
 	m.issues = msg.issues
 	m.prs = msg.prs
+	m.logEntries = msg.logs
+	// Opening the logs view marks everything currently in the ring as seen,
+	// clearing the unseen-entry badge.
+	if m.resource == ResLogs {
+		m.logsSeenSeq = m.ring.MaxSeq()
+	}
 	m.cursor = 0
 	m.applyFilter()
 }
@@ -205,6 +226,25 @@ func (m *model) loadClankers() tea.Cmd {
 	}
 }
 
+// loadLogs builds the logs list from the in-memory ring (newest first).
+// It is local — no spinner — and tolerates a nil ring (yielding an empty
+// list). Each entry's message and detail seed the row so the `/` filter
+// matches both; renderLogRow draws the time and severity from the entry
+// looked up by Item.ID.
+func (m *model) loadLogs() tea.Cmd {
+	entries := m.ring.Entries()
+	return func() tea.Msg {
+		items := make([]Item, 0, len(entries))
+		byID := make(map[string]logx.Entry, len(entries))
+		for _, e := range entries {
+			id := strconv.Itoa(e.Seq)
+			items = append(items, Item{ID: id, Title: e.Msg, Detail: e.Detail})
+			byID[id] = e
+		}
+		return itemsLoadedMsg{resource: ResLogs, items: items, logs: byID}
+	}
+}
+
 // loadBranches builds the branch-pick list for `a` on the worktrees
 // view: branches by recency, excluding the trunk and any branch
 // that already has a worktree. It fetches first so branches that exist
@@ -214,10 +254,12 @@ func (m *model) loadClankers() tea.Cmd {
 func (m *model) loadBranches() tea.Cmd {
 	ws := m.workspace
 	svc := m.deps.WorktreeSvc
+	logger := m.log
 	return func() tea.Msg {
 		fetchNote := ""
 		if err := svc.Fetch(ws); err != nil {
 			fetchNote = "fetch failed; showing cached branches"
+			logger.Warn("fetch branches", "err", err)
 		}
 		branches, err := svc.Branches(ws)
 		if err != nil {

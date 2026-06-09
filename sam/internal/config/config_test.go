@@ -195,6 +195,34 @@ func TestLoad_ColorsInvalid(t *testing.T) {
 	}
 }
 
+func TestLoad_LogLevelDefault(t *testing.T) {
+	// Absent [log] section defaults the level.
+	path := writeConfig(t, soloWorkspace)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Log.Level != DefaultLogLevel {
+		t.Errorf("default level: got %q want %q", cfg.Log.Level, DefaultLogLevel)
+	}
+
+	// Explicit value is honored (case-insensitively).
+	path = writeConfig(t, soloWorkspace+"\n[log]\nlevel = \"WARN\"\n")
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load explicit level: %v", err)
+	}
+	if cfg.Log.Level != "WARN" {
+		t.Errorf("explicit level: got %q want WARN", cfg.Log.Level)
+	}
+
+	// Garbage is rejected.
+	path = writeConfig(t, soloWorkspace+"\n[log]\nlevel = \"chatty\"\n")
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for invalid log level")
+	}
+}
+
 func TestLoad_RepoWindowMismatch(t *testing.T) {
 	body := `
 [workspaces.andbegin]

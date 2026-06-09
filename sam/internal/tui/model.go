@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"log/slog"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 )
 
@@ -44,6 +46,12 @@ type model struct {
 	issues  map[string]issue.Issue // resolved issues by Item.ID (ResIssues)
 	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
 	pending *fromIssueState        // in-flight from-issue flow, if any
+
+	log         *slog.Logger          // diagnostic sink (never nil; discards when unset)
+	ring        *logx.Ring            // in-memory log buffer the `:logs` view reads (may be nil)
+	logPath     string                // temp file the logger tees to (shown in the logs empty state)
+	logEntries  map[string]logx.Entry // entries backing the current logs list, keyed by Item.ID
+	logsSeenSeq int                   // ring Seq last shown in the logs view (badge baseline)
 
 	mode   inputMode
 	input  textinput.Model
@@ -84,6 +92,13 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 
 	st := newStyles(tuiCfg.Colors)
 
+	// A nil logger means a non-menu caller (or a test) didn't wire one;
+	// discard so the model can log unconditionally.
+	logger := deps.Logger
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+
 	return &model{
 		workspaceName: workspaceName,
 		workspace:     workspace,
@@ -96,6 +111,9 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		spinner:       sp,
 		ac:            newAutocomplete(tuiCfg.Autocomplete.Max, st),
 		styles:        st,
+		log:           logger,
+		ring:          deps.LogRing,
+		logPath:       deps.LogPath,
 	}
 }
 
@@ -314,7 +332,7 @@ func (m *model) popView() {
 // Refuses to leave ResWorkspaces while no workspace is active — every
 // other resource needs one.
 func (m *model) switchResource(r Resource) tea.Cmd {
-	if m.workspace == nil && r != ResWorkspaces {
+	if m.workspace == nil && r != ResWorkspaces && r != ResLogs {
 		m.status = "pick a workspace first"
 		return nil
 	}

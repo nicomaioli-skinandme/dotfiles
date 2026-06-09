@@ -33,6 +33,7 @@ import (
 var (
 	workspaceFlag string
 	outputFlag    string
+	logLevelFlag  string
 )
 
 func main() {
@@ -48,6 +49,8 @@ func main() {
 		"workspace name (overrides cwd-based resolution)")
 	root.PersistentFlags().StringVarP(&outputFlag, "output", "o", "table",
 		"output format: table (default) or json")
+	root.PersistentFlags().StringVar(&logLevelFlag, "log-level", "",
+		"minimum log level: debug, info, warn, or error (overrides [log] level / $SAM_LOG_LEVEL)")
 
 	// Build the entity services + controllers once. Services wrap infra;
 	// controllers wire in the cross-entity services they orchestrate.
