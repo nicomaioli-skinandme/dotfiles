@@ -3,10 +3,12 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
@@ -20,6 +22,7 @@ type itemsLoadedMsg struct {
 	items      []Item
 	issues     map[string]issue.Issue // resolved issues, keyed by Item.ID (ResIssues only)
 	prs        map[string]pr.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
+	logs       map[string]logx.Entry  // log entries, keyed by Item.ID (ResLogs only)
 	status     string                 // non-fatal note shown in the status line (e.g. "no issues")
 	err        error
 }
@@ -42,6 +45,8 @@ func (m *model) loadResource() tea.Cmd {
 	case ResClankers:
 		m.loading = true
 		return tea.Batch(m.spinner.Tick, m.loadClankers())
+	case ResLogs:
+		return m.loadLogs()
 	}
 	return nil
 }
@@ -69,6 +74,12 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	}
 	m.issues = msg.issues
 	m.prs = msg.prs
+	m.logEntries = msg.logs
+	// Opening the logs view marks everything currently in the ring as seen,
+	// clearing the unseen-entry badge.
+	if m.resource == ResLogs {
+		m.logsSeenSeq = m.ring.MaxSeq()
+	}
 	m.cursor = 0
 	m.applyFilter()
 }
@@ -202,6 +213,25 @@ func (m *model) loadClankers() tea.Cmd {
 			status = "no running claude processes"
 		}
 		return itemsLoadedMsg{resource: ResClankers, items: items, status: status}
+	}
+}
+
+// loadLogs builds the logs list from the in-memory ring (newest first).
+// It is local — no spinner — and tolerates a nil ring (yielding an empty
+// list). Each entry's message and detail seed the row so the `/` filter
+// matches both; renderLogRow draws the time and severity from the entry
+// looked up by Item.ID.
+func (m *model) loadLogs() tea.Cmd {
+	entries := m.ring.Entries()
+	return func() tea.Msg {
+		items := make([]Item, 0, len(entries))
+		byID := make(map[string]logx.Entry, len(entries))
+		for _, e := range entries {
+			id := strconv.Itoa(e.Seq)
+			items = append(items, Item{ID: id, Title: e.Msg, Detail: e.Detail})
+			byID[id] = e
+		}
+		return itemsLoadedMsg{resource: ResLogs, items: items, logs: byID}
 	}
 }
 

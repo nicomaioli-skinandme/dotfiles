@@ -2,6 +2,7 @@ package tui
 
 import (
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -13,6 +14,7 @@ const (
 	modalConfirm           // yes/no, defaults to No
 	modalInput             // single-line text entry
 	modalHelp              // contextual shortcut reference
+	modalDetail            // scrollable read-only text (a full log entry)
 )
 
 // modalState holds the active overlay. For a confirm modal, onConfirm is
@@ -26,6 +28,7 @@ type modalState struct {
 	onConfirm   func() tea.Cmd
 	input       textinput.Model
 	onSubmit    func(string) tea.Cmd
+	viewport    viewport.Model // scrollable body for modalDetail
 }
 
 func (m *model) closeModal() {
@@ -45,6 +48,16 @@ func (m *model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.closeModal()
 		}
 		return m, nil
+
+	case modalDetail:
+		switch msg.String() {
+		case "esc", "q", "enter":
+			m.closeModal()
+			return m, nil
+		}
+		var c tea.Cmd
+		m.modal.viewport, c = m.modal.viewport.Update(msg)
+		return m, c
 
 	case modalConfirm:
 		switch msg.String() {

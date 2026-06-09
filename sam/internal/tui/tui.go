@@ -86,10 +86,11 @@ const (
 	ResIssues                     // GitHub Project backlog / open issues (async)
 	ResPRs                        // open PRs requesting you as reviewer (async)
 	ResClankers                   // running claude processes and their tmux context
+	ResLogs                       // this session's diagnostic log (errors, warnings, activity)
 )
 
 // resources lists the kinds in display/cycle order.
-var resources = []Resource{ResWorktrees, ResWorkspaces, ResIssues, ResPRs, ResClankers}
+var resources = []Resource{ResWorktrees, ResWorkspaces, ResIssues, ResPRs, ResClankers, ResLogs}
 
 func (r Resource) Name() string {
 	switch r {
@@ -103,6 +104,8 @@ func (r Resource) Name() string {
 		return "prs"
 	case ResClankers:
 		return "clankers"
+	case ResLogs:
+		return "logs"
 	}
 	return "?"
 }

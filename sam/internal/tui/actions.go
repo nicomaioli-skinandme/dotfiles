@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
@@ -92,6 +94,44 @@ func (m *model) activate() (tea.Model, tea.Cmd) {
 		return m.activatePR(it)
 	case ResClankers:
 		return m.activateClanker(it)
+	case ResLogs:
+		return m.activateLog(it)
+	}
+	return m, nil
+}
+
+// activateLog opens the highlighted log entry in a scrollable detail modal
+// so its full (often multi-line) message and error text can be read.
+func (m *model) activateLog(it Item) (tea.Model, tea.Cmd) {
+	e, ok := m.logEntries[it.ID]
+	if !ok {
+		return m, nil
+	}
+
+	vw := m.width * 7 / 10
+	if vw < 20 {
+		vw = m.width - 8
+	}
+	if vw < 1 {
+		vw = 1
+	}
+	vh := m.height * 6 / 10
+	if vh < 3 {
+		vh = 3
+	}
+
+	content := e.Msg
+	if e.Detail != "" {
+		content += "\n\n" + e.Detail
+	}
+	vp := viewport.New(viewport.WithWidth(vw), viewport.WithHeight(vh))
+	vp.SetContent(lipgloss.NewStyle().Width(vw).Render(content))
+
+	header := fmt.Sprintf("%s · %s", e.Time.Format("2006-01-02 15:04:05"), e.Level.String())
+	m.modal = modalState{
+		kind:     modalDetail,
+		title:    m.logLevelStyle(e.Level).Render(header),
+		viewport: vp,
 	}
 	return m, nil
 }
