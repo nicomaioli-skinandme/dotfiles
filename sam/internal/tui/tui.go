@@ -20,6 +20,7 @@
 package tui
 
 import (
+	"log/slog"
 	"os/exec"
 	"sort"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/clanker"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
 )
@@ -46,6 +48,16 @@ type Deps struct {
 	PRs         pr.Controller
 	Clankers    clanker.Controller
 	SessionSvc  SessionService
+
+	// Logger and LogRing are the cross-cutting diagnostic sink and its
+	// in-memory view (not an entity): the TUI logs through Logger and the
+	// `:logs` view reads LogRing. Both may be nil — the model substitutes a
+	// discard logger and treats a nil ring as empty — so tests need not wire
+	// them. LogPath is the temp file the logger tees to, shown in the logs
+	// view's empty state ("" when there is none).
+	Logger  *slog.Logger
+	LogRing *logx.Ring
+	LogPath string
 }
 
 // SessionService is the slice of the session entity the TUI consumes. It
