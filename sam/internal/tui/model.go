@@ -62,6 +62,10 @@ type model struct {
 	err    error
 }
 
+// maxStackDepth caps the navigation history: <ESC>/h walks back at most
+// this many hops before the stack runs dry.
+const maxStackDepth = 5
+
 // snapshot captures a list view so <ESC> can restore it.
 type snapshot struct {
 	resource   Resource
@@ -192,6 +196,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openHelp()
 	case "esc", "h", "left":
 		return m.back()
+	case "x":
+		m.clearFilter()
 	case "q":
 		return m, tea.Quit
 	}
@@ -257,22 +263,26 @@ func (m *model) leaveInput() {
 	m.ac.Close()
 }
 
-// back handles <ESC>/h: dismiss help, pop a pushed view, or clear the
-// active search filter, in that order.
+// back handles <ESC>/h: pop the navigation history one hop. A no-op when
+// the stack is empty.
 func (m *model) back() (tea.Model, tea.Cmd) {
 	if len(m.stack) > 0 {
 		m.popView()
-		return m, nil
-	}
-	if m.query != "" {
-		m.query = ""
-		m.applyFilter()
 	}
 	return m, nil
 }
 
-// pushView saves the current list so a sub-view (branch pick) can be
-// shown and later restored.
+// clearFilter drops the active search query (a no-op when none is set).
+func (m *model) clearFilter() {
+	if m.query != "" {
+		m.query = ""
+		m.applyFilter()
+	}
+}
+
+// pushView saves the current list onto the navigation history so a later
+// <ESC>/h can restore it. Capped at maxStackDepth — the oldest entry is
+// dropped once the cap is exceeded.
 func (m *model) pushView() {
 	m.stack = append(m.stack, snapshot{
 		resource:   m.resource,
@@ -281,6 +291,9 @@ func (m *model) pushView() {
 		cursor:     m.cursor,
 		query:      m.query,
 	})
+	if len(m.stack) > maxStackDepth {
+		m.stack = m.stack[len(m.stack)-maxStackDepth:]
+	}
 }
 
 func (m *model) popView() {
@@ -305,9 +318,11 @@ func (m *model) switchResource(r Resource) tea.Cmd {
 		m.status = "pick a workspace first"
 		return nil
 	}
+	if r != m.resource {
+		m.pushView() // record current view so back() can return to it
+	}
 	m.resource = r
 	m.branchPick = false
-	m.stack = nil
 	m.query = ""
 	m.cursor = 0
 	m.status = ""

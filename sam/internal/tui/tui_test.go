@@ -176,6 +176,105 @@ func TestSwitchResourceResetsState(t *testing.T) {
 	}
 }
 
+func TestSwitchResourcePushesHistory(t *testing.T) {
+	m := testModel(sampleItems()) // starts on ResWorktrees
+
+	_ = m.switchResource(ResIssues)
+
+	if len(m.stack) != 1 {
+		t.Fatalf("stack depth: got %d, want 1", len(m.stack))
+	}
+	if got := m.stack[len(m.stack)-1].resource; got != ResWorktrees {
+		t.Errorf("snapshot resource: got %v, want worktrees", got)
+	}
+}
+
+func TestSwitchResourceSelfSwitchDoesNotPush(t *testing.T) {
+	m := testModel(sampleItems()) // starts on ResWorktrees
+
+	_ = m.switchResource(ResWorktrees)
+
+	if len(m.stack) != 0 {
+		t.Errorf("self-switch pushed history: stack depth %d, want 0", len(m.stack))
+	}
+}
+
+func TestNavigationHistoryCapsAtFive(t *testing.T) {
+	m := testModel(sampleItems())
+
+	// Alternate resources so every switch is a real change and pushes.
+	seq := []Resource{ResIssues, ResWorktrees, ResIssues, ResWorktrees, ResIssues, ResWorktrees, ResIssues}
+	for _, r := range seq {
+		_ = m.switchResource(r)
+	}
+
+	if len(m.stack) != maxStackDepth {
+		t.Fatalf("stack depth: got %d, want %d", len(m.stack), maxStackDepth)
+	}
+}
+
+func TestBackPopsAcrossResources(t *testing.T) {
+	m := testModel(sampleItems())
+	m.query = "fix"
+	m.applyFilter()
+
+	_ = m.switchResource(ResIssues)
+	_ = m.switchResource(ResPRs)
+
+	_, _ = m.back() // PRs -> Issues
+	if m.resource != ResIssues {
+		t.Fatalf("after first back: got %v, want issues", m.resource)
+	}
+
+	_, _ = m.back() // Issues -> Worktrees
+	if m.resource != ResWorktrees {
+		t.Fatalf("after second back: got %v, want worktrees", m.resource)
+	}
+	if m.query != "fix" {
+		t.Errorf("query not restored: got %q, want %q", m.query, "fix")
+	}
+	if len(m.stack) != 0 {
+		t.Errorf("stack not empty after walking back: %d", len(m.stack))
+	}
+}
+
+func TestBackIsPopOnlyWithActiveFilter(t *testing.T) {
+	m := testModel(sampleItems())
+	_ = m.switchResource(ResIssues) // stack: [worktrees]
+	m.query = "x"
+	m.applyFilter()
+
+	_, _ = m.back()
+
+	// back pops to the previous resource; it does not merely clear the
+	// filter and stay put.
+	if m.resource != ResWorktrees {
+		t.Errorf("back did not pop: resource %v, want worktrees", m.resource)
+	}
+	if len(m.stack) != 0 {
+		t.Errorf("stack depth after back: %d, want 0", len(m.stack))
+	}
+}
+
+func TestClearFilterKeyClearsWithoutNavigating(t *testing.T) {
+	m := testModel(sampleItems())
+	_ = m.switchResource(ResIssues) // stack: [worktrees], resource issues
+	m.query = "foo"
+	m.applyFilter()
+
+	m.handleKey(runeKey('x'))
+
+	if m.query != "" {
+		t.Errorf("query not cleared: %q", m.query)
+	}
+	if m.resource != ResIssues {
+		t.Errorf("clear filter navigated: resource %v, want issues", m.resource)
+	}
+	if len(m.stack) != 1 {
+		t.Errorf("clear filter touched stack: depth %d, want 1", len(m.stack))
+	}
+}
+
 func TestActivateIssueStartsFlow(t *testing.T) {
 	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{}, Deps{})
 	m.resource = ResIssues
