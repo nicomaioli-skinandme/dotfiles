@@ -104,7 +104,7 @@ func shouldDefaultToMenu(args []string) bool {
 			// Flags that take a detached value consume the next arg, so it
 			// isn't mistaken for a subcommand. Attached forms (--flag=v,
 			// -ov) are single args and fall through the continue below.
-			if a == "--workspace" || a == "--output" || a == "-o" {
+			if a == "--workspace" || a == "--output" || a == "-o" || a == "--log-level" {
 				skipNext = true
 			}
 			continue
