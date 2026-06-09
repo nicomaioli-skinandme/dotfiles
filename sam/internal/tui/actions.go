@@ -168,6 +168,7 @@ func (m *model) switchWorkspace(name string) tea.Cmd {
 	}
 	m.workspace = &ws
 	m.workspaceName = name
+	m.log.Info("workspace " + name)
 	return m.switchResource(ResWorktrees)
 }
 
@@ -225,6 +226,7 @@ func (m *model) activateIssue(it Item) (tea.Model, tea.Cmd) {
 func (m *model) handleFromIssuePrepared(msg fromIssuePreparedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
+		m.log.Error("prepare issue", "err", msg.err)
 		m.status = "gh errored"
 		return m, nil
 	}
@@ -290,6 +292,7 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	m.pending = nil
 	if msg.err != nil {
+		m.log.Error("from issue", "err", msg.err)
 		m.status = "gh errored"
 		return m, nil
 	}
@@ -329,6 +332,7 @@ func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
 func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
+		m.log.Error("from pr", "err", msg.err)
 		m.status = "gh errored"
 		return m, nil
 	}
@@ -420,9 +424,11 @@ func deleteWorktreeCmd(ctrl worktree.Controller, ws *config.Workspace, wsName, t
 func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 	delete(m.deleting, msg.target)
 	if msg.err != nil {
+		m.log.Error("delete "+msg.target, "err", msg.err)
 		m.status = "action failed"
 		return m, nil
 	}
+	m.log.Info(msg.info)
 	m.status = msg.info
 	if msg.reload {
 		return m, m.loadResource()
@@ -435,6 +441,7 @@ func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleAttachReady(msg attachReadyMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.loading = false
+		m.log.Error("build session", "err", msg.err)
 		m.status = "could not build session"
 		return m, nil
 	}
@@ -448,6 +455,7 @@ func (m *model) handleAttachReady(msg attachReadyMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleAttached(msg attachedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
+		m.log.Error("attach", "err", msg.err)
 		m.status = "attach failed"
 		return m, nil
 	}
@@ -460,10 +468,12 @@ func (m *model) handleAttached(msg attachedMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleWorktreeAdded(msg worktreeAddedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
+		m.log.Error("create worktree "+msg.branch, "err", msg.err)
 		m.status = "could not create worktree"
 		return m, nil
 	}
 	m.popView() // leave the branch-pick sub-view, back to worktrees
+	m.log.Info("created " + msg.branch)
 	m.status = "created " + msg.branch
 	return m, m.loadResource()
 }

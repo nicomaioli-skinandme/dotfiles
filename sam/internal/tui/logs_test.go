@@ -93,6 +93,25 @@ func TestActivateLogOpensDetailModal(t *testing.T) {
 	}
 }
 
+func TestLoadErrorIsLogged(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelInfo, "")
+	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{}, Deps{Logger: logger, LogRing: ring})
+	m.resource = ResIssues
+
+	m.applyLoaded(itemsLoadedMsg{resource: ResIssues, err: errors.New("gh: HTTP 401")})
+
+	if m.status != "gh errored" {
+		t.Errorf("status = %q, want generic %q", m.status, "gh errored")
+	}
+	entries := ring.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("ring entries = %d, want 1 logged error", len(entries))
+	}
+	if entries[0].Level != slog.LevelError || entries[0].Detail != "gh: HTTP 401" {
+		t.Errorf("logged entry = %+v, want ERROR with full detail", entries[0])
+	}
+}
+
 func TestLogRowSearchMatchesDetail(t *testing.T) {
 	m := seededLogsModel(t, func(l *slog.Logger) {
 		l.Info("started")

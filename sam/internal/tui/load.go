@@ -59,10 +59,15 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	m.loading = false
 	m.status = msg.status
 	if msg.err != nil {
-		// Surface load failures in the status line and keep the TUI usable
-		// (switch to another resource, quit) rather than aborting. The error
-		// is kept generic on purpose — raw gh/git output is multiline and
-		// would overflow the status bar; richer error surfacing comes later.
+		// Keep the status line generic — raw gh/git output is multiline and
+		// would overflow the one-row bar — but log the full error so it's
+		// visible in the `:logs` view. The TUI stays usable (switch resource,
+		// quit) rather than aborting.
+		label := "load " + m.resource.Name()
+		if m.branchPick {
+			label = "load branches"
+		}
+		m.log.Error(label, "err", msg.err)
 		if m.resource == ResIssues || m.resource == ResPRs {
 			m.status = "gh errored"
 		} else {
@@ -71,6 +76,11 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 		m.items = nil
 	} else {
 		m.items = msg.items
+		// Skip the breadcrumb for the logs view itself, so opening `:logs`
+		// doesn't append a self-referential entry.
+		if m.resource != ResLogs {
+			m.log.Debug("loaded", "resource", m.resource.Name(), "n", len(msg.items))
+		}
 	}
 	m.issues = msg.issues
 	m.prs = msg.prs
@@ -244,10 +254,12 @@ func (m *model) loadLogs() tea.Cmd {
 func (m *model) loadBranches() tea.Cmd {
 	ws := m.workspace
 	svc := m.deps.WorktreeSvc
+	logger := m.log
 	return func() tea.Msg {
 		fetchNote := ""
 		if err := svc.Fetch(ws); err != nil {
 			fetchNote = "fetch failed; showing cached branches"
+			logger.Warn("fetch branches", "err", err)
 		}
 		branches, err := svc.Branches(ws)
 		if err != nil {
