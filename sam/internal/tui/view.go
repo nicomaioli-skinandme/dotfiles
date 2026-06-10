@@ -309,6 +309,7 @@ func (m *model) helpText() string {
 		"  / search   : command",
 		"  tab       multi-select",
 		"  esc / h   back",
+		"  R         reload",
 		"  x         clear filter",
 		"  ? / esc   dismiss this help",
 		"  : q       quit",

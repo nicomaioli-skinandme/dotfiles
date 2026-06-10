@@ -491,6 +491,60 @@ func TestAttachedReloadsAndKeepsCursor(t *testing.T) {
 	}
 }
 
+func TestBackReloads(t *testing.T) {
+	m := testModel(sampleItems()) // starts on ResWorktrees
+	m.cursor = 2
+
+	_ = m.switchResource(ResIssues) // stack: [worktrees]
+
+	_, cmd := m.back()
+	if m.resource != ResWorktrees {
+		t.Fatalf("back did not pop: resource %v, want worktrees", m.resource)
+	}
+	if m.cursor != 2 {
+		t.Errorf("back did not restore cursor from snapshot: got %d, want 2", m.cursor)
+	}
+	if cmd == nil {
+		t.Error("back must reload the restored view")
+	}
+}
+
+func TestReloadKeyReloads(t *testing.T) {
+	m := testModel(sampleItems())
+	m.cursor = 2
+
+	_, cmd := m.handleKey(runeKey('R'))
+	if cmd == nil {
+		t.Error("R must issue a reload command")
+	}
+	if m.resource != ResWorktrees {
+		t.Errorf("R changed resource: got %v, want worktrees", m.resource)
+	}
+	if len(m.stack) != 0 {
+		t.Errorf("R touched the navigation stack: depth %d, want 0", len(m.stack))
+	}
+	if m.cursor != 2 {
+		t.Errorf("R moved the cursor: got %d, want 2", m.cursor)
+	}
+}
+
+func TestApplyLoadedPreservesCursor(t *testing.T) {
+	m := testModel(sampleItems())
+	m.cursor = 2
+
+	// A reload returning a list still long enough keeps the highlight put.
+	m.applyLoaded(itemsLoadedMsg{resource: ResWorktrees, items: sampleItems()})
+	if m.cursor != 2 {
+		t.Errorf("reload did not preserve cursor: got %d, want 2", m.cursor)
+	}
+
+	// A shorter list clamps the cursor into range.
+	m.applyLoaded(itemsLoadedMsg{resource: ResWorktrees, items: []Item{{ID: "only", Title: "only"}}})
+	if m.cursor != 0 {
+		t.Errorf("reload did not clamp cursor to shorter list: got %d, want 0", m.cursor)
+	}
+}
+
 func TestDeleteGuardsMainWorktree(t *testing.T) {
 	m := newModel("ws", &config.Workspace{Trunk: "main", Worktrees: "/wt", Repo: "/repo"}, nil, ResWorktrees, config.Tui{}, Deps{})
 	m.items = []Item{{ID: "main", Title: "main", Type: WorktreeMain}}

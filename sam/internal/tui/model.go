@@ -214,6 +214,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openHelp()
 	case "esc", "h", "left":
 		return m.back()
+	case "R":
+		return m, m.reloadCurrent()
 	case "x":
 		m.clearFilter()
 	case "q":
@@ -281,13 +283,28 @@ func (m *model) leaveInput() {
 	m.ac.Close()
 }
 
-// back handles <ESC>/h: pop the navigation history one hop. A no-op when
-// the stack is empty.
+// back handles <ESC>/h: pop the navigation history one hop, then reload the
+// restored view so state that changed while we were away (a closed session, a
+// new worktree) is reflected. The popped snapshot shows immediately while the
+// fresh load runs. A no-op when the stack is empty.
 func (m *model) back() (tea.Model, tea.Cmd) {
-	if len(m.stack) > 0 {
-		m.popView()
+	if len(m.stack) == 0 {
+		return m, nil
 	}
-	return m, nil
+	m.popView()
+	return m, m.reloadCurrent()
+}
+
+// reloadCurrent re-fetches the current view's data in place. It dispatches to
+// the branch-pick loader when that sub-view is active; otherwise the normal
+// resource loader. The cursor/query are left as-is (applyLoaded no longer
+// resets the cursor), so the highlight survives the refresh.
+func (m *model) reloadCurrent() tea.Cmd {
+	if m.branchPick {
+		m.loading = true
+		return tea.Batch(m.spinner.Tick, m.loadBranches())
+	}
+	return m.loadResource()
 }
 
 // clearFilter drops the active search query (a no-op when none is set).
