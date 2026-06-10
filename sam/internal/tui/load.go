@@ -90,7 +90,10 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	if m.resource == ResLogs {
 		m.logsSeenSeq = m.ring.MaxSeq()
 	}
-	m.cursor = 0
+	// Leave the cursor where it is — a reload-in-place (back nav, R, attach,
+	// delete) keeps the highlight on its row, clamped to the new list by
+	// applyFilter. Fresh views (switchResource, add) pre-zero the cursor
+	// themselves, so this doesn't pin them to the top mid-load.
 	m.applyFilter()
 }
 
