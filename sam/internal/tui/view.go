@@ -318,7 +318,10 @@ func (m *model) helpText() string {
 	case m.branchPick:
 		lines = append(lines, "", "  enter     create worktree from branch")
 	case m.resource == ResWorktrees:
-		lines = append(lines, "", "  a         new worktree", "  d         delete worktree")
+		lines = append(lines, "",
+			"  a         worktree from branch",
+			"  A         new branch + worktree",
+			"  d         delete worktree")
 	case m.resource == ResWorkspaces:
 		lines = append(lines, "", "  enter     switch workspace", "  a         add workspace")
 	case m.resource == ResPRs:

@@ -374,6 +374,62 @@ func (m *model) add() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// addNew handles `A`: prompt for a brand-new branch name, then create the
+// branch + worktree off origin/<trunk>. Only the worktrees list responds (not
+// the branch picker, where `a`'s selection is already in flight).
+func (m *model) addNew() (tea.Model, tea.Cmd) {
+	if m.resource != ResWorktrees || m.branchPick {
+		return m, nil
+	}
+	ti := textinput.New()
+	ti.SetVirtualCursor(true)
+	ti.Focus()
+	m.modal = modalState{
+		kind:  modalInput,
+		title: "New branch name",
+		input: ti,
+		onSubmit: func(v string) tea.Cmd {
+			return m.createBranchCmd(v)
+		},
+	}
+	return m, nil
+}
+
+// createBranchCmd validates the typed name and, when valid, fetches origin
+// (best-effort) and creates the new branch + worktree off origin/<trunk>
+// behind the spinner. An invalid name surfaces a status line and creates
+// nothing. Names are used as typed (not slugified); they must be a single
+// flat segment so the worktree lister can see the new directory.
+func (m *model) createBranchCmd(name string) tea.Cmd {
+	branch := strings.TrimSpace(name)
+	switch {
+	case branch == "":
+		m.status = "branch name required"
+		return nil
+	case strings.ContainsAny(branch, "/ \t"):
+		m.status = "branch name can't contain spaces or '/'"
+		return nil
+	case m.workspace.MaxBranchLen > 0 && len(branch) > m.workspace.MaxBranchLen:
+		m.status = fmt.Sprintf("branch name too long (limit %d)", m.workspace.MaxBranchLen)
+		return nil
+	}
+	m.loading = true
+	m.status = ""
+	ws := m.workspace
+	wsName := m.workspaceName
+	svc := m.deps.WorktreeSvc
+	ctrl := m.deps.Worktrees
+	logger := m.log
+	return tea.Batch(m.spinner.Tick, func() tea.Msg {
+		// Fetch so the new branch starts from the latest trunk; non-fatal,
+		// mirroring loadBranches (origin/<trunk> stays usable when offline).
+		if err := svc.Fetch(ws); err != nil {
+			logger.Warn("fetch before new branch", "err", err)
+		}
+		return worktreeAddedMsg{branch: branch, err: ctrl.AddNew(ws, wsName, branch)}
+	})
+}
+
 // del handles `d`: delete the highlighted worktree after confirmation.
 func (m *model) del() (tea.Model, tea.Cmd) {
 	if m.resource != ResWorktrees || m.branchPick {
@@ -472,7 +528,9 @@ func (m *model) handleWorktreeAdded(msg worktreeAddedMsg) (tea.Model, tea.Cmd) {
 		m.status = "could not create worktree"
 		return m, nil
 	}
-	m.popView() // leave the branch-pick sub-view, back to worktrees
+	if m.branchPick {
+		m.popView() // leave the branch-pick sub-view, back to worktrees
+	}
 	m.log.Info("created " + msg.branch)
 	m.status = "created " + msg.branch
 	return m, m.loadResource()

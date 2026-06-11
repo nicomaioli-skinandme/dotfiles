@@ -206,6 +206,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.activate()
 	case "a":
 		return m.add()
+	case "A":
+		return m.addNew()
 	case "d":
 		return m.del()
 	case "tab":

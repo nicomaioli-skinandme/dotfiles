@@ -556,3 +556,95 @@ func TestDeleteGuardsMainWorktree(t *testing.T) {
 		t.Error("delete on main worktree should not open a modal")
 	}
 }
+
+func TestAddNewOpensInputModal(t *testing.T) {
+	m := testModel(sampleItems()) // ResWorktrees
+
+	if _, cmd := m.addNew(); cmd != nil {
+		t.Error("addNew should not return a command; it only opens the modal")
+	}
+	if m.modal.kind != modalInput {
+		t.Fatalf("expected input modal, got kind %d", m.modal.kind)
+	}
+	if m.modal.title != "New branch name" {
+		t.Errorf("modal title: got %q", m.modal.title)
+	}
+
+	// Not available from the branch picker (where `a`'s selection is in flight).
+	m2 := testModel(sampleItems())
+	m2.branchPick = true
+	m2.addNew()
+	if m2.modal.kind != modalNone {
+		t.Error("addNew should be a no-op in the branch picker")
+	}
+}
+
+func TestAddNewKeyRoutes(t *testing.T) {
+	m := testModel(sampleItems())
+	m.handleKey(runeKey('A'))
+	if m.modal.kind != modalInput {
+		t.Fatalf("`A` should open the new-branch input modal, got kind %d", m.modal.kind)
+	}
+}
+
+func TestCreateBranchValidation(t *testing.T) {
+	ws := &config.Workspace{Trunk: "main", MaxBranchLen: 8}
+	cases := []struct {
+		name     string
+		in       string
+		wantCmd  bool   // valid input returns a command and sets loading
+		wantStat string // expected status substring on rejection
+	}{
+		{"empty", "  ", false, "required"},
+		{"slash", "feat/x", false, "'/'"},
+		{"space", "feat x", false, "spaces"},
+		{"too long", "way-too-long-name", false, "too long"},
+		{"valid", "scratch", true, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := newModel("ws", ws, nil, ResWorktrees, config.Tui{}, Deps{})
+			cmd := m.createBranchCmd(c.in)
+			if c.wantCmd {
+				if cmd == nil {
+					t.Fatal("valid name should return a command")
+				}
+				if !m.loading {
+					t.Error("valid name should set loading")
+				}
+				return
+			}
+			if cmd != nil {
+				t.Errorf("invalid name should return nil command")
+			}
+			if m.loading {
+				t.Error("invalid name should not set loading")
+			}
+			if !strings.Contains(m.status, c.wantStat) {
+				t.Errorf("status %q should mention %q", m.status, c.wantStat)
+			}
+		})
+	}
+}
+
+func TestWorktreeAddedPopGuard(t *testing.T) {
+	// The branch-picker (`a`) flow pushed a view, so a successful add pops
+	// back to the worktrees list.
+	picker := testModel(sampleItems())
+	picker.pushView()
+	picker.branchPick = true
+	picker.handleWorktreeAdded(worktreeAddedMsg{branch: "feat-x"})
+	if len(picker.stack) != 0 {
+		t.Errorf("branch-pick add should pop the pushed view; stack len %d", len(picker.stack))
+	}
+
+	// The modal-driven (`A`) flow never pushed a view, so it must not pop
+	// some unrelated stacked view.
+	modal := testModel(sampleItems())
+	modal.pushView() // simulate an unrelated prior navigation
+	modal.branchPick = false
+	modal.handleWorktreeAdded(worktreeAddedMsg{branch: "feat-x"})
+	if len(modal.stack) != 1 {
+		t.Errorf("modal-driven add must not pop; stack len %d, want 1", len(modal.stack))
+	}
+}
