@@ -95,6 +95,17 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	// applyFilter. Fresh views (switchResource, add) pre-zero the cursor
 	// themselves, so this doesn't pin them to the top mid-load.
 	m.applyFilter()
+	// A pending focus request (e.g. a just-added workspace) wins over the
+	// kept position.
+	if m.focusID != "" {
+		for i, it := range m.filtered {
+			if it.ID == m.focusID {
+				m.cursor = i
+				break
+			}
+		}
+		m.focusID = ""
+	}
 }
 
 func (m *model) loadWorktrees() tea.Cmd {

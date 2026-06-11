@@ -204,8 +204,22 @@ func ParseLogLevel(s string) (slog.Level, error) {
 	return l, nil
 }
 
+// DefaultTui returns the Tui settings Load would apply to an empty
+// [tui] section. The menu uses it on first run, when no config file
+// exists to load yet.
+func DefaultTui() Tui {
+	return Tui{
+		Autocomplete: Autocomplete{Max: DefaultAutocompleteMax},
+		Colors: Colors{
+			Primary:   DefaultColorPrimary,
+			Secondary: DefaultColorSecondary,
+			Destroy:   DefaultColorDestroy,
+		},
+	}
+}
+
 // Default returns a Workspace with sensible defaults for the fields the
-// wizard fills silently (tmux, max_branch_len, and the repo window the
+// setup form fills silently (tmux, max_branch_len, and the repo window the
 // Claude panes target). Callers overlay user-supplied values on top.
 // No default Claude prompts are set: until the user configures a
 // from_issue / from_pr claude_prompt, those flows launch no Claude pane.

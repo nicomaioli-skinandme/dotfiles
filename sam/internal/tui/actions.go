@@ -367,9 +367,8 @@ func (m *model) add() (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, tea.Batch(m.spinner.Tick, m.loadBranches())
 	case ResWorkspaces:
-		// Adding a workspace runs the huh wizard, which needs the terminal.
-		m.result = Result{RunWizard: true}
-		return m, tea.Quit
+		// Adding a workspace opens the in-TUI form (see form.go).
+		return m.openAddForm()
 	}
 	return m, nil
 }

@@ -293,9 +293,6 @@ func TestActivateIssueStartsFlow(t *testing.T) {
 	if !m.loading {
 		t.Error("expected loading to be set while preparing")
 	}
-	if m.result != (Result{}) {
-		t.Errorf("must not set a result before the flow completes, got %+v", m.result)
-	}
 }
 
 func TestActivatePRStartsFlow(t *testing.T) {
@@ -308,16 +305,13 @@ func TestActivatePRStartsFlow(t *testing.T) {
 	m.applyFilter()
 
 	// Activating a PR kicks off the async bootstrap behind the spinner; it
-	// must not set a result or quit yet (no modals in the PR flow).
+	// must not quit yet (no modals in the PR flow).
 	_, cmd := m.activate()
 	if cmd == nil {
 		t.Fatal("expected a bootstrap command from activating a PR")
 	}
 	if !m.loading {
 		t.Error("expected loading to be set while bootstrapping")
-	}
-	if m.result != (Result{}) {
-		t.Errorf("must not set a result before the flow completes, got %+v", m.result)
 	}
 }
 
@@ -397,10 +391,6 @@ func TestActivateWorktreeEnsuresAndAttaches(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected a command from activating a worktree")
-	}
-	// The TUI attaches in place now — it must not record a result or quit.
-	if m.result != (Result{}) {
-		t.Errorf("worktree activation must not set a result; got %+v", m.result)
 	}
 
 	// Running the ensure command builds-if-missing and reports the session.

@@ -21,6 +21,7 @@ import (
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/session"
 	sessioncli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/session/cli"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/tui"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/wizard"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace"
 	workspacecli "github.com/nicomaioli-skinandme/dotfiles/sam/internal/workspace/cli"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/worktree"
@@ -99,6 +100,7 @@ func main() {
 		PRs:         prCtrl,
 		Clankers:    clankerCtrl,
 		SessionSvc:  sessionSvc,
+		Setup:       wizard.Service{},
 	}
 	root.AddCommand(newMenuCmd(deps))
 	root.AddCommand(&cobra.Command{

@@ -64,10 +64,14 @@ type model struct {
 	status   string // transient message line (errors, "no issues", etc.)
 
 	modal modalState
+	form  *formState // add-workspace form when open (gates keys + body rendering)
 
-	stack  []snapshot // one entry per pushed sub-view (branch pick)
-	result Result
-	err    error
+	// focusID, when set, names the Item.ID the cursor should land on after
+	// the next load (e.g. a just-added workspace).
+	focusID string
+
+	stack []snapshot // one entry per pushed sub-view (branch pick)
+	err   error
 }
 
 // maxStackDepth caps the navigation history: <ESC>/h walks back at most
@@ -131,7 +135,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case spinner.TickMsg:
-		if m.loading || len(m.deleting) > 0 {
+		if m.loading || len(m.deleting) > 0 || (m.form != nil && m.form.busy != "") {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
@@ -162,6 +166,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fromPRDoneMsg:
 		return m.handleFromPRDone(msg)
+
+	case formRepoProbedMsg:
+		return m.handleFormRepoProbed(msg)
+
+	case formProjectFetchedMsg:
+		return m.handleFormProjectFetched(msg)
+
+	case formScopesCheckedMsg:
+		return m.handleFormScopesChecked(msg)
+
+	case formSavedMsg:
+		return m.handleFormSaved(msg)
 	}
 	return m, nil
 }
@@ -179,6 +195,10 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.modal.kind != modalNone {
 		return m.handleModalKey(msg)
+	}
+
+	if m.form != nil {
+		return m.handleFormKey(msg)
 	}
 
 	switch m.mode {

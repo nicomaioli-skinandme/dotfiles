@@ -1,7 +1,6 @@
 // Package tui is sam's full-screen interactive front end: an input bar
 // on top, a single central navigation list in the middle, and a status
-// bar with a breadcrumb at the bottom. It replaces the sequence of huh
-// prompts that drove the old menu.
+// bar with a breadcrumb at the bottom.
 //
 // Navigation is modal and vim-like. `/` filters the on-screen list, `:`
 // switches between resources (`:worktrees`, `:workspaces`, `:issues`,
@@ -15,8 +14,9 @@
 // you land back exactly where you left it. The tmux *session* is always
 // built detached (`new-session -d`) and owned by the daemonized tmux
 // server, never by sam; only the transient attach *client* is sam's
-// child. The TUI quits (records a [Result]) only to run the workspace-add
-// wizard, which is an in-process form that can't ride tea.ExecProcess.
+// child. Adding a workspace is an in-TUI form too (see form.go), so the
+// program never quits with a pending action — it returns only when the
+// user is done.
 package tui
 
 import (
@@ -29,6 +29,7 @@ import (
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/clanker"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
+	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/issue"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/pr"
@@ -48,6 +49,7 @@ type Deps struct {
 	PRs         pr.Controller
 	Clankers    clanker.Controller
 	SessionSvc  SessionService
+	Setup       SetupService
 
 	// Logger and LogRing are the cross-cutting diagnostic sink and its
 	// in-memory view (not an entity): the TUI logs through Logger and the
@@ -75,6 +77,18 @@ type SessionService interface {
 	Ensure(ws *config.Workspace, wsName, name string) (string, error)
 	AttachCmd(name string) *exec.Cmd
 	Switch(name string) error
+}
+
+// SetupService is the slice of the workspace-setup flow the add-workspace
+// form consumes: the I/O between form steps (repo probing, GitHub Project
+// lookup, gh scope validation) and the final config write. Declared here
+// (consumer-side) so tests can substitute a fake; wizard.Service satisfies
+// it.
+type SetupService interface {
+	ProbeRepo(p string) (repo, trunk, originSlug string, err error)
+	FetchProject(owner string, number int) (string, ghx.ProjectStatusField, error)
+	CheckScopes(required []string) error
+	SaveWorkspace(name string, ws config.Workspace) (string, error)
 }
 
 // Resource is one navigable category, switched between with `:`.
@@ -158,31 +172,22 @@ type Item struct {
 	Type   WorktreeType
 }
 
-// Result is the value the TUI hands back on exit. Attaching to a session
-// no longer goes through here — the model does that in place via
-// tea.ExecProcess and keeps running. The only thing left that must happen
-// after the program releases the terminal is the workspace-add wizard (an
-// in-process huh form that can't ride tea.ExecProcess), so RunWizard is
-// the sole field; an all-zero Result means "user quit, do nothing".
-type Result struct {
-	RunWizard bool // run the workspace-setup wizard after exit, then re-enter the menu
-}
-
-// Run launches the full-screen TUI against the given workspace and
-// returns the action the user chose. all is the set of configured
-// workspaces (for `:workspaces`); start is the resource to open on;
-// tuiCfg carries menu-level settings (e.g. autocomplete sizing).
-func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, tuiCfg config.Tui, deps Deps) (Result, error) {
+// Run launches the full-screen TUI against the given workspace and blocks
+// until the user quits. all is the set of configured workspaces (for
+// `:workspaces`); start is the resource to open on; firstRun opens with
+// the add-workspace form already active (no config exists yet — cancelling
+// it quits without writing anything); tuiCfg carries menu-level settings
+// (e.g. autocomplete sizing).
+func Run(workspaceName string, workspace *config.Workspace, all map[string]config.Workspace, start Resource, firstRun bool, tuiCfg config.Tui, deps Deps) error {
 	m := newModel(workspaceName, workspace, all, start, tuiCfg, deps)
+	if firstRun {
+		m.form = newAddForm(true)
+	}
 	final, err := tea.NewProgram(m).Run()
 	if err != nil {
-		return Result{}, err
+		return err
 	}
-	fm := final.(*model)
-	if fm.err != nil {
-		return Result{}, fm.err
-	}
-	return fm.result, nil
+	return final.(*model).err
 }
 
 // commandKind classifies a parsed `:` command.

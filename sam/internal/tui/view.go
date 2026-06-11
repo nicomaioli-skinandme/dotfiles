@@ -63,6 +63,10 @@ func (m *model) renderBody() string {
 		h = 1
 	}
 
+	if m.form != nil {
+		return m.renderForm(h)
+	}
+
 	if m.loading {
 		what := m.resource.Name()
 		if m.branchPick {
@@ -204,6 +208,9 @@ func (m *model) renderStatusBar() string {
 	scope := m.resource.Name()
 	if m.branchPick {
 		scope = "new worktree · pick branch"
+	}
+	if m.form != nil {
+		scope = "workspaces · add"
 	}
 	var crumb string
 	if m.workspaceName == "" {
