@@ -26,13 +26,33 @@ import (
 // `issueNumber` is exposed to the hook via SAM_ISSUE_NUMBER. Pass 0
 // when there's no associated issue (e.g. from `new-worktree`).
 func CreateWorktree(workspace *config.Workspace, branch string, issueNumber int, workspaceName string) (string, error) {
+	return createWorktree(workspace, branch, issueNumber, workspaceName, func(path string) error {
+		return gitx.WorktreeAdd(workspace.Repo, path, branch)
+	})
+}
+
+// CreateWorktreeNewBranch is CreateWorktree but creates a brand-new branch at
+// `start` instead of checking out an existing one. Same idempotency and
+// `worktree_setup` hook behavior. `start` is a commit-ish the branch is rooted
+// at (e.g. origin/<trunk>).
+func CreateWorktreeNewBranch(workspace *config.Workspace, branch, start string, issueNumber int, workspaceName string) (string, error) {
+	return createWorktree(workspace, branch, issueNumber, workspaceName, func(path string) error {
+		return gitx.WorktreeAddNewBranch(workspace.Repo, path, branch, start)
+	})
+}
+
+// createWorktree resolves the worktree path, short-circuits idempotently when
+// it already exists, runs `add` to materialize the worktree, then runs the
+// optional `worktree_setup` hook. `add` is the only step that differs between
+// checking out an existing branch and creating a new one.
+func createWorktree(workspace *config.Workspace, branch string, issueNumber int, workspaceName string, add func(path string) error) (string, error) {
 	path := filepath.Join(workspace.Worktrees, branch)
 	if _, err := os.Stat(path); err == nil {
 		return path, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if err := gitx.WorktreeAdd(workspace.Repo, path, branch); err != nil {
+	if err := add(path); err != nil {
 		return "", err
 	}
 	if workspace.WorktreeSetup == "" {

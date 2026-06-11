@@ -40,6 +40,13 @@ func (Service) Create(ws *config.Workspace, branch string, issueNum int, wsName 
 	return setup.CreateWorktree(ws, branch, issueNum, wsName)
 }
 
+// CreateNew creates a worktree for a brand-new branch rooted at `start`
+// (e.g. origin/<trunk>) and runs the worktree_setup hook, returning the
+// worktree path. Idempotent like Create.
+func (Service) CreateNew(ws *config.Workspace, branch, start string, issueNum int, wsName string) (string, error) {
+	return setup.CreateWorktreeNewBranch(ws, branch, start, issueNum, wsName)
+}
+
 // Remove force-removes the named linked worktree.
 func (Service) Remove(ws *config.Workspace, name string) error {
 	return gitx.WorktreeRemoveForce(ws.Repo, filepath.Join(ws.Worktrees, name))

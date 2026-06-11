@@ -57,18 +57,29 @@ func newListCmd(ctrl worktree.Controller, resolve Resolve, format Format) *cobra
 }
 
 func newAddCmd(ctrl worktree.Controller, resolve Resolve) *cobra.Command {
-	return &cobra.Command{
+	var newBranch bool
+	cmd := &cobra.Command{
 		Use:   "add <branch>",
-		Short: "Create a worktree (and tmux session) for an existing branch, then attach",
-		Args:  cobra.ExactArgs(1),
+		Short: "Create a worktree (and tmux session) for a branch, then attach",
+		Long: "Create a worktree and tmux session for <branch>, then attach.\n\n" +
+			"By default <branch> is an existing local or remote branch. With\n" +
+			"--new-branch/-b, <branch> is created as a brand-new branch off\n" +
+			"origin/<trunk> (mirroring the worktree view's `A` command).",
+		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			ws, name, err := resolve()
 			if err != nil {
 				return err
 			}
+			if newBranch {
+				return ctrl.AddNew(ws, name, args[0])
+			}
 			return ctrl.Add(ws, name, args[0])
 		},
 	}
+	cmd.Flags().BoolVarP(&newBranch, "new-branch", "b", false,
+		"create <branch> as a new branch off origin/<trunk>")
+	return cmd
 }
 
 func newDeleteCmd(ctrl worktree.Controller, resolve Resolve) *cobra.Command {
