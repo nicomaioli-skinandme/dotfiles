@@ -131,6 +131,15 @@ func WorktreeAdd(repo, path, branch string) error {
 	return err
 }
 
+// WorktreeAddNewBranch creates a new branch at start and checks it out in a
+// new worktree at path (git worktree add -b … --no-track). --no-track keeps
+// the new branch from adopting start's upstream (e.g. origin/<trunk>): a
+// brand-new branch has no upstream until the user pushes it.
+func WorktreeAddNewBranch(repo, path, branch, start string) error {
+	_, err := run(repo, "worktree", "add", "-b", branch, "--no-track", path, start)
+	return err
+}
+
 func WorktreeRemoveForce(repo, path string) error {
 	_, err := run(repo, "worktree", "remove", "--force", path)
 	return err

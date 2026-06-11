@@ -46,6 +46,29 @@ func (c Controller) Add(ws *config.Workspace, wsName, branch string) error {
 	if err != nil {
 		return err
 	}
+	return c.attach(ws, wsName, branch, path)
+}
+
+// AddNew creates a brand-new local branch off origin/<trunk>, a worktree for
+// it, builds its session (if absent), and attaches — mirroring Add's tail but
+// creating the branch rather than checking out an existing one. The caller is
+// expected to have fetched origin first (the TUI does, best-effort) so the
+// branch starts from the latest trunk. The branch is created with --no-track,
+// so it has no upstream until pushed. As with Add, SwitchOrAttach can replace
+// the process image, so invoke only after any full-screen TUI has released the
+// terminal.
+func (c Controller) AddNew(ws *config.Workspace, wsName, branch string) error {
+	start := "origin/" + ws.Trunk
+	path, err := c.worktrees.CreateNew(ws, branch, start, 0, wsName)
+	if err != nil {
+		return err
+	}
+	return c.attach(ws, wsName, branch, path)
+}
+
+// attach builds the worktree's tmux session when absent, then switches/attaches
+// to it. Shared by Add and AddNew.
+func (c Controller) attach(ws *config.Workspace, wsName, branch, path string) error {
 	sess := c.sessions.Name(wsName, branch)
 	if !c.sessions.Has(sess) {
 		if err := c.sessions.Build(sess, ws, path); err != nil {

@@ -158,3 +158,51 @@ func TestCreateWorktree_IssueZeroLeavesEnvEmpty(t *testing.T) {
 		t.Errorf("SAM_ISSUE_NUMBER should be empty when issueNumber=0; got %q", body)
 	}
 }
+
+// revParse resolves a ref to its SHA in repo, failing the test on error.
+func revParse(t *testing.T, repo, ref string) string {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repo, "rev-parse", ref)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse %s: %v\n%s", ref, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestCreateWorktreeNewBranch(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	wts := filepath.Join(root, "wts")
+	initRepo(t, repo)
+
+	ws := &config.Workspace{Repo: repo, Worktrees: wts, Trunk: "main"}
+	path, err := CreateWorktreeNewBranch(ws, "scratch", "main", 0, "demo")
+	if err != nil {
+		t.Fatalf("CreateWorktreeNewBranch: %v", err)
+	}
+	if path != filepath.Join(wts, "scratch") {
+		t.Errorf("path: got %q", path)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("worktree dir missing: %v", err)
+	}
+	// The new branch must exist and be rooted at the start point (main).
+	if got, want := revParse(t, repo, "scratch"), revParse(t, repo, "main"); got != want {
+		t.Errorf("scratch should be rooted at main: scratch=%s main=%s", got, want)
+	}
+}
+
+func TestCreateWorktreeNewBranch_ExistingBranchErrors(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	wts := filepath.Join(root, "wts")
+	initRepo(t, repo) // creates a "feature" branch
+
+	ws := &config.Workspace{Repo: repo, Worktrees: wts, Trunk: "main"}
+	// -b refuses a name that already exists, so a collision surfaces as an
+	// error rather than silently reusing the branch.
+	if _, err := CreateWorktreeNewBranch(ws, "feature", "main", 0, "demo"); err == nil {
+		t.Fatal("expected error creating a branch that already exists")
+	}
+}
