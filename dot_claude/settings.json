@@ -1,5 +1,5 @@
 {
-  "model": "opus[1m]",
+  "model": "claude-fable-5[1m]",
   "enabledPlugins": {
     "code-simplifier@claude-plugins-official": true,
     "code-review@claude-plugins-official": true,
