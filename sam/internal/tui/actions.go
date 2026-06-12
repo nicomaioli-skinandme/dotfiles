@@ -226,9 +226,7 @@ func (m *model) activateIssue(it Item) (tea.Model, tea.Cmd) {
 func (m *model) handleFromIssuePrepared(msg fromIssuePreparedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.log.Error("prepare issue", "err", msg.err)
-		m.status = "gh errored"
-		return m, nil
+		return m.fail("Couldn't prepare the issue", msg.err)
 	}
 	m.pending = &fromIssueState{iss: msg.iss, me: msg.me, branch: msg.branch, existing: msg.existing}
 
@@ -292,9 +290,7 @@ func (m *model) handleFromIssueDone(msg fromIssueDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	m.pending = nil
 	if msg.err != nil {
-		m.log.Error("from issue", "err", msg.err)
-		m.status = "gh errored"
-		return m, nil
+		return m.fail("Couldn't set up the issue worktree", msg.err)
 	}
 	// The issue Apply already built the session; attach to it directly.
 	return m.attachToSession(msg.session)
@@ -332,9 +328,7 @@ func (m *model) activatePR(it Item) (tea.Model, tea.Cmd) {
 func (m *model) handleFromPRDone(msg fromPRDoneMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.log.Error("from pr", "err", msg.err)
-		m.status = "gh errored"
-		return m, nil
+		return m.fail("Couldn't set up the PR worktree", msg.err)
 	}
 	// The pr Apply already built the session; attach to it directly.
 	return m.attachToSession(msg.session)
@@ -479,9 +473,7 @@ func deleteWorktreeCmd(ctrl worktree.Controller, ws *config.Workspace, wsName, t
 func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 	delete(m.deleting, msg.target)
 	if msg.err != nil {
-		m.log.Error("delete "+msg.target, "err", msg.err)
-		m.status = "action failed"
-		return m, nil
+		return m.fail("Couldn't delete "+msg.target, msg.err)
 	}
 	m.log.Info(msg.info)
 	m.status = msg.info
@@ -495,10 +487,7 @@ func (m *model) handleActionDone(msg actionDoneMsg) (tea.Model, tea.Cmd) {
 // build error and stays.
 func (m *model) handleAttachReady(msg attachReadyMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.loading = false
-		m.log.Error("build session", "err", msg.err)
-		m.status = "could not build session"
-		return m, nil
+		return m.fail("Couldn't build the session", msg.err)
 	}
 	return m.attachToSession(msg.session)
 }
@@ -510,9 +499,7 @@ func (m *model) handleAttachReady(msg attachReadyMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleAttached(msg attachedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.log.Error("attach", "err", msg.err)
-		m.status = "attach failed"
-		return m, nil
+		return m.fail("Couldn't attach to the session", msg.err)
 	}
 	m.status = ""
 	return m, m.loadResource()
@@ -523,9 +510,7 @@ func (m *model) handleAttached(msg attachedMsg) (tea.Model, tea.Cmd) {
 func (m *model) handleWorktreeAdded(msg worktreeAddedMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	if msg.err != nil {
-		m.log.Error("create worktree "+msg.branch, "err", msg.err)
-		m.status = "could not create worktree"
-		return m, nil
+		return m.fail("Couldn't create worktree "+msg.branch, msg.err)
 	}
 	if m.branchPick {
 		m.popView() // leave the branch-pick sub-view, back to worktrees

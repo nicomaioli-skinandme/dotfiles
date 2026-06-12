@@ -47,11 +47,11 @@ type model struct {
 	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
 	pending *fromIssueState        // in-flight from-issue flow, if any
 
-	log         *slog.Logger          // diagnostic sink (never nil; discards when unset)
-	ring        *logx.Ring            // in-memory log buffer the `:logs` view reads (may be nil)
-	logPath     string                // temp file the logger tees to (shown in the logs empty state)
-	logEntries  map[string]logx.Entry // entries backing the current logs list, keyed by Item.ID
-	logsSeenSeq int                   // ring Seq last shown in the logs view (badge baseline)
+	log        *slog.Logger          // diagnostic sink (never nil; discards when unset)
+	ring       *logx.Ring            // in-memory log buffer the `:logs` view reads (may be nil)
+	logPath    string                // temp file the logger tees to (shown in the logs empty state)
+	logEntries map[string]logx.Entry // entries backing the current logs list, keyed by Item.ID
+	logIcon    hitRegion             // where renderStatusBar last drew the ⚠ icon, for click hit-testing
 
 	mode   inputMode
 	input  textinput.Model
@@ -77,6 +77,17 @@ type model struct {
 // maxStackDepth caps the navigation history: <ESC>/h walks back at most
 // this many hops before the stack runs dry.
 const maxStackDepth = 5
+
+// hitRegion is a clickable span on a single row, [x0, x1). The zero value
+// matches nothing, so an un-drawn target (e.g. the ⚠ icon when there are no
+// warnings) is never clicked by accident.
+type hitRegion struct {
+	row, x0, x1 int
+}
+
+func (h hitRegion) contains(x, y int) bool {
+	return y == h.row && x >= h.x0 && x < h.x1
+}
 
 // snapshot captures a list view so <ESC> can restore it.
 type snapshot struct {
@@ -133,6 +144,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseClickMsg:
+		// The only mouse affordance: left-clicking the ⚠ icon jumps to `:logs`.
+		// Ignored while an overlay (modal/form) owns input.
+		if m.modal.kind == modalNone && m.form == nil &&
+			msg.Button == tea.MouseLeft && m.logIcon.contains(msg.X, msg.Y) {
+			return m, m.switchResource(ResLogs)
+		}
+		return m, nil
 
 	case spinner.TickMsg:
 		if m.loading || len(m.deleting) > 0 || (m.form != nil && m.form.busy != "") {

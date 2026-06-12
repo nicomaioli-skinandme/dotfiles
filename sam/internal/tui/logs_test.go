@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/config"
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/logx"
 )
@@ -71,10 +73,6 @@ func TestLoadLogsBuildsRowsNewestFirst(t *testing.T) {
 	if e.Detail != "gh: not authenticated" {
 		t.Errorf("entry detail = %q, want full error", e.Detail)
 	}
-	// Opening the view marks everything seen.
-	if m.logsSeenSeq != m.ring.MaxSeq() {
-		t.Errorf("logsSeenSeq = %d, want MaxSeq %d", m.logsSeenSeq, m.ring.MaxSeq())
-	}
 }
 
 func TestActivateLogOpensDetailModal(t *testing.T) {
@@ -94,16 +92,24 @@ func TestActivateLogOpensDetailModal(t *testing.T) {
 	}
 }
 
-func TestLoadErrorIsLogged(t *testing.T) {
+func TestLoadErrorOpensModalAndLogs(t *testing.T) {
 	logger, ring, _ := logx.New(slog.LevelInfo, "")
 	m := newModel("ws", &config.Workspace{}, nil, ResIssues, config.Tui{}, Deps{Logger: logger, LogRing: ring})
 	m.resource = ResIssues
 
 	m.applyLoaded(itemsLoadedMsg{resource: ResIssues, err: errors.New("gh: HTTP 401")})
 
-	if m.status != "gh errored" {
-		t.Errorf("status = %q, want generic %q", m.status, "gh errored")
+	// The error surfaces in the modal, not a terse status string.
+	if m.modal.kind != modalError {
+		t.Errorf("modal kind = %v, want modalError", m.modal.kind)
 	}
+	if !m.modal.confirmYes {
+		t.Error("error modal should default-highlight View logs (confirmYes)")
+	}
+	if m.status != "" {
+		t.Errorf("status = %q, want empty (no terse string)", m.status)
+	}
+	// The full error is still logged for the `:logs` detail view and temp file.
 	entries := ring.Entries()
 	if len(entries) != 1 {
 		t.Fatalf("ring entries = %d, want 1 logged error", len(entries))
@@ -113,21 +119,105 @@ func TestLoadErrorIsLogged(t *testing.T) {
 	}
 }
 
-func TestUnseenBadge(t *testing.T) {
-	logger, ring, _ := logx.New(slog.LevelInfo, "")
-	logger.Warn("w", "err", errors.New("x"))
-	logger.Error("e", "err", errors.New("y"))
+func TestLogIconShowsOnWarnOrError(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelDebug, "")
 	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
 	m.width, m.height = 80, 24
 
-	if bar := m.renderStatusBar(); !strings.Contains(bar, "⚠ 2") {
-		t.Errorf("status bar missing unseen badge: %q", bar)
+	// Routine info logging must not trip the icon, or it would never be off.
+	logger.Info("loaded")
+	if bar := m.renderStatusBar(); strings.Contains(bar, "⚠") {
+		t.Errorf("icon shown for an info-only log: %q", bar)
 	}
 
-	// Marking everything seen (as opening :logs does) clears the badge.
-	m.logsSeenSeq = ring.MaxSeq()
-	if bar := m.renderStatusBar(); strings.Contains(bar, "⚠") {
-		t.Errorf("badge should clear once seen: %q", bar)
+	// A warning is the signal the icon exists to carry.
+	logger.Warn("w", "err", errors.New("x"))
+	if bar := m.renderStatusBar(); !strings.Contains(bar, "⚠") {
+		t.Errorf("icon missing despite a warning: %q", bar)
+	}
+}
+
+func TestErrorModalViewLogsNavigates(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelInfo, "")
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
+	m.width, m.height = 80, 24
+
+	// A failed operation opens the error modal with View logs highlighted.
+	m.failNow("Couldn't build the session", errors.New("boom"))
+	if m.modal.kind != modalError || !m.modal.confirmYes {
+		t.Fatalf("modal = {%v, confirmYes=%v}, want modalError with View logs default", m.modal.kind, m.modal.confirmYes)
+	}
+
+	// Enter follows the highlighted View logs action to the logs view.
+	_, cmd := m.handleKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.modal.kind != modalNone {
+		t.Errorf("modal kind = %v, want closed", m.modal.kind)
+	}
+	if m.resource != ResLogs {
+		t.Errorf("resource = %v, want ResLogs", m.resource)
+	}
+	if cmd == nil {
+		t.Error("expected a load command for the logs view")
+	}
+}
+
+func TestErrorModalDismiss(t *testing.T) {
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{})
+	m.failNow("Couldn't build the session", errors.New("boom"))
+
+	// Toggle to Dismiss, then enter — closes the modal, stays put.
+	m.handleKey(tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.modal.confirmYes {
+		t.Fatal("left should move highlight off View logs")
+	}
+	if _, cmd := m.handleKey(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd != nil {
+		t.Errorf("dismiss should not return a command, got %v", cmd)
+	}
+	if m.modal.kind != modalNone {
+		t.Errorf("modal kind = %v, want closed", m.modal.kind)
+	}
+	if m.resource != ResWorktrees {
+		t.Errorf("resource = %v, want unchanged ResWorktrees", m.resource)
+	}
+
+	// esc also dismisses.
+	m.failNow("again", errors.New("boom"))
+	m.handleKey(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.modal.kind != modalNone {
+		t.Errorf("esc should dismiss: modal kind = %v", m.modal.kind)
+	}
+}
+
+func TestLogIconClickNavigates(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelInfo, "")
+	logger.Warn("w", "err", errors.New("x"))
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
+	m.width, m.height = 80, 24
+
+	// Rendering the status bar records the icon's clickable bounds.
+	m.renderStatusBar()
+	if m.logIcon.x1 <= m.logIcon.x0 {
+		t.Fatalf("icon hit region not recorded: %+v", m.logIcon)
+	}
+
+	// A left-click on the icon jumps to the logs view.
+	m.Update(tea.MouseClickMsg{X: m.logIcon.x0, Y: m.height - 1, Button: tea.MouseLeft})
+	if m.resource != ResLogs {
+		t.Errorf("resource = %v, want ResLogs after icon click", m.resource)
+	}
+}
+
+func TestLogIconClickOffTargetIgnored(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelInfo, "")
+	logger.Warn("w", "err", errors.New("x"))
+	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
+	m.width, m.height = 80, 24
+	m.renderStatusBar()
+
+	// A click away from the icon does nothing.
+	m.Update(tea.MouseClickMsg{X: 0, Y: 0, Button: tea.MouseLeft})
+	if m.resource != ResWorktrees {
+		t.Errorf("resource = %v, want unchanged ResWorktrees", m.resource)
 	}
 }
 

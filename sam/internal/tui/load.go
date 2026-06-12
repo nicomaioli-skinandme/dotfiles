@@ -59,20 +59,14 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	m.loading = false
 	m.status = msg.status
 	if msg.err != nil {
-		// Keep the status line generic — raw gh/git output is multiline and
-		// would overflow the one-row bar — but log the full error so it's
-		// visible in the `:logs` view. The TUI stays usable (switch resource,
-		// quit) rather than aborting.
-		label := "load " + m.resource.Name()
+		// Route through the standard failure path: it logs the full (multi-line)
+		// error to the ring/file for `:logs` and pops the error modal with a
+		// short fixed headline. The TUI stays usable underneath.
+		headline := "Couldn't load " + m.resource.Name()
 		if m.branchPick {
-			label = "load branches"
+			headline = "Couldn't load branches"
 		}
-		m.log.Error(label, "err", msg.err)
-		if m.resource == ResIssues || m.resource == ResPRs {
-			m.status = "gh errored"
-		} else {
-			m.status = "couldn't load " + m.resource.Name()
-		}
+		m.failNow(headline, msg.err)
 		m.items = nil
 	} else {
 		m.items = msg.items
@@ -85,11 +79,6 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	m.issues = msg.issues
 	m.prs = msg.prs
 	m.logEntries = msg.logs
-	// Opening the logs view marks everything currently in the ring as seen,
-	// clearing the unseen-entry badge.
-	if m.resource == ResLogs {
-		m.logsSeenSeq = m.ring.MaxSeq()
-	}
 	// Leave the cursor where it is — a reload-in-place (back nav, R, attach,
 	// delete) keeps the highlight on its row, clamped to the new list by
 	// applyFilter. Fresh views (switchResource, add) pre-zero the cursor

@@ -15,6 +15,7 @@ const (
 	modalInput             // single-line text entry
 	modalHelp              // contextual shortcut reference
 	modalDetail            // scrollable read-only text (a full log entry)
+	modalError             // a failed operation: Dismiss / View logs
 )
 
 // modalState holds the active overlay. For a confirm modal, onConfirm is
@@ -23,7 +24,7 @@ const (
 type modalState struct {
 	kind        modalKind
 	title       string
-	confirmYes  bool // current Yes/No highlight (false = No, the default)
+	confirmYes  bool // current right-button highlight: a confirm's Yes (default No), or the error modal's View logs (default true)
 	destructive bool // a confirm whose Yes is destructive (renders in the destroy palette)
 	onConfirm   func() tea.Cmd
 	input       textinput.Model
@@ -37,6 +38,13 @@ func (m *model) closeModal() {
 
 func (m *model) openHelp() {
 	m.modal = modalState{kind: modalHelp}
+}
+
+// openErrorModal surfaces a failed operation. confirmYes starts true so the
+// View logs button is highlighted by default (the issue's preference) —
+// pressing enter takes the user straight to the full error in `:logs`.
+func (m *model) openErrorModal(headline string) {
+	m.modal = modalState{kind: modalError, title: headline, confirmYes: true}
 }
 
 // handleModalKey routes keys while an overlay is shown.
@@ -58,6 +66,21 @@ func (m *model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var c tea.Cmd
 		m.modal.viewport, c = m.modal.viewport.Update(msg)
 		return m, c
+
+	case modalError:
+		switch msg.String() {
+		case "left", "right", "h", "l", "tab":
+			m.modal.confirmYes = !m.modal.confirmYes
+		case "esc", "q":
+			m.closeModal()
+		case "enter":
+			viewLogs := m.modal.confirmYes
+			m.closeModal()
+			if viewLogs {
+				return m, m.switchResource(ResLogs)
+			}
+		}
+		return m, nil
 
 	case modalConfirm:
 		switch msg.String() {
