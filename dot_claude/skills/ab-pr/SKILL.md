@@ -45,21 +45,18 @@ No conventional-commit prefixes, no scope tags, no extra punctuation. Use the is
 
 ### 4. Draft the body
 
-Keep it brief — the diff and linked issue carry the detail.
+Keep it brief and decision-focused — the diff and linked issue carry the detail. A good PR description surfaces *what mattered and why*, not a file-by-file change log.
 
-- If a PR template was found, fill its sections in. Put 2–4 short bullets under "Summary" / "What changed" / equivalent. Leave optional sections empty rather than padding.
-- If no template exists, use:
-
-  ```markdown
-  ## Summary
-
-  - <bullet>
-  - <bullet>
-
-  Closes #<issue>
-  ```
-
+- If a PR template was found, fill its sections in. If no template exists, use a `## Summary` section followed by `Closes #<issue>`.
+- **Summary**: lead with one sentence of context — what this enables and *why* (the problem it solves). Then 2–4 short bullets covering the **meaningful decisions and trade-offs**, e.g.:
+  - The key design choice and the reasoning behind it (especially anything non-obvious — why this approach over the alternative).
+  - Rollout/compatibility reasoning where relevant (e.g. "backend-only change, honours zero-downtime").
+  - Notable scope boundaries (what was deliberately left out and why).
+- **Do not** enumerate line-by-line changes, list every file touched, or restate what the diff already shows. If a reviewer can see it in the diff, it doesn't need a bullet.
+- Leave optional/“Additional changes” sections empty rather than padding them — that section is reserved for genuinely out-of-scope extras.
 - Always include a `Closes #<issue>` reference if the template doesn't already.
+
+> Litmus test: every bullet should tell the reviewer something the diff alone wouldn't — a reason, a trade-off, or a decision. Drop bullets that just narrate the code.
 
 ### 5. Ask about Release Actions
 
