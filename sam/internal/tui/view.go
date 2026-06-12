@@ -28,6 +28,7 @@ func (m *model) View() tea.View {
 	if m.modal.kind != modalNone {
 		v := tea.NewView(m.overlay(base, m.renderModal()))
 		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
 		return v
 	}
 
@@ -40,11 +41,16 @@ func (m *model) View() tea.View {
 		x, y := m.ac.Position(anchor, lipgloss.Width(popup), lipgloss.Height(popup), m.width, m.height)
 		v := tea.NewView(m.overlayAt(base, popup, x, y, 1))
 		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
 		return v
 	}
 
 	v := tea.NewView(base)
 	v.AltScreen = true
+	// Cell-motion mouse reporting drives the clickable ⚠ icon. The only mouse
+	// affordance is that click; this trades the terminal's native drag-select
+	// (now behind the terminal's modifier key) for it.
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -220,20 +226,31 @@ func (m *model) renderStatusBar() string {
 	}
 	left := m.styles.breadcrumb.Render(crumb)
 
-	// Badge unseen warnings/errors (entries logged since the logs view was
-	// last opened) so failures are noticed without watching the status line.
-	// Destroy palette when any are errors, primary for warnings only.
+	// A persistent ⚠ whenever the log holds any warning or error, so failures
+	// stay noticeable after the error modal is dismissed. No count (it read as
+	// an editor diagnostics tally and reset confusingly); just presence.
+	// Destroy palette when any are errors, primary for warnings only. The icon
+	// is clickable — see logIcon below and the MouseClickMsg handler.
 	badge := ""
-	if unseen := m.ring.CountSince(slog.LevelWarn, m.logsSeenSeq); unseen > 0 {
+	if m.ring.CountSince(slog.LevelWarn, 0) > 0 {
 		style := m.styles.active
-		if m.ring.CountSince(slog.LevelError, m.logsSeenSeq) > 0 {
+		if m.ring.CountSince(slog.LevelError, 0) > 0 {
 			style = m.styles.deleting
 		}
-		badge = style.Render(fmt.Sprintf("⚠ %d", unseen)) + "   "
+		badge = style.Render("⚠") + "   "
 	}
 
 	count := fmt.Sprintf("%d items", len(m.filtered))
 	right := badge + m.styles.hint.Render(count+"   ? help ")
+
+	// Record the icon's clickable bounds for the mouse handler. The status bar
+	// is the last row; the icon leads the right-aligned cluster. Cleared (zero
+	// value, matches nothing) when no icon is drawn.
+	m.logIcon = hitRegion{}
+	if badge != "" {
+		x0 := m.width - lipgloss.Width(right)
+		m.logIcon = hitRegion{row: m.height - 1, x0: x0, x1: x0 + lipgloss.Width(badge)}
+	}
 
 	// The status bar must stay exactly one row: renderBody reserves only
 	// chromeHeight rows, so a multiline status (e.g. a multiline gh error)
@@ -283,6 +300,26 @@ func (m *model) renderModal() string {
 			m.modal.input.View(),
 			"",
 			m.styles.hint.Render("enter confirm · esc cancel"),
+		)
+		return m.styles.modalBorder.Render(body)
+	case modalError:
+		// The headline is a short fixed message (never the raw error, which is
+		// multi-line); the full error lives in `:logs`. Rendered in the destroy
+		// palette so it reads as a failure. View logs is the highlighted default.
+		dismiss := m.styles.modalAffirm.Render("Dismiss")
+		viewLogs := m.styles.modalAffirm.Render("View logs")
+		if m.modal.confirmYes {
+			viewLogs = m.styles.modalActive.Render("View logs")
+		} else {
+			dismiss = m.styles.modalActive.Render("Dismiss")
+		}
+		buttons := lipgloss.JoinHorizontal(lipgloss.Top, dismiss, "   ", viewLogs)
+		body := lipgloss.JoinVertical(
+			lipgloss.Center,
+			m.styles.deleting.Render(m.modal.title),
+			m.styles.hint.Render("see :logs for the full error"),
+			"",
+			buttons,
 		)
 		return m.styles.modalBorder.Render(body)
 	}
