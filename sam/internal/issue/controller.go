@@ -23,9 +23,16 @@ func NewController(issues Service, worktrees worktree.Service, sessions session.
 	return Controller{issues: issues, worktrees: worktrees, sessions: sessions}
 }
 
-// List returns the candidate issues for the workspace.
-func (c Controller) List(ws *config.Workspace) ([]Issue, error) {
-	return c.issues.List(ws)
+// List returns the workspace's open issues, narrowed by filter; see
+// Service.List.
+func (c Controller) List(ws *config.Workspace, filter Filter) ([]Issue, error) {
+	return c.issues.List(ws, filter)
+}
+
+// Columns returns the project's status columns in board order (empty when no
+// GitHub Project), for seeding the column filter.
+func (c Controller) Columns(ws *config.Workspace) ([]string, error) {
+	return c.issues.Columns(ws)
 }
 
 // HasGhProject reports whether the workspace links a GitHub Project.

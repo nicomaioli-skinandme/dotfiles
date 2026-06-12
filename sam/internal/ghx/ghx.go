@@ -304,6 +304,52 @@ type ProjectStatusField struct {
 	Options []ProjectStatusOption
 }
 
+// StatusColumns returns the option names of the project's status field, in
+// board order. The field is selected by the configured StatusFieldID (the
+// robust path — option names can collide, IDs can't), falling back to a field
+// literally named "Status" when no ID is set. An empty project (no owner /
+// number) yields nil, nil so non-project callers can ignore columns.
+func StatusColumns(cfg config.GhProject) ([]string, error) {
+	if cfg.Owner == "" || cfg.Number == 0 {
+		return nil, nil
+	}
+	out, err := run(
+		"project", "field-list", strconv.Itoa(cfg.Number),
+		"--owner", cfg.Owner,
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Fields []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Options []struct {
+				Name string `json:"name"`
+			} `json:"options"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		return nil, fmt.Errorf("parse gh project field-list output: %w", err)
+	}
+	for _, f := range resp.Fields {
+		match := f.ID == cfg.StatusFieldID
+		if cfg.StatusFieldID == "" {
+			match = f.Name == "Status"
+		}
+		if !match {
+			continue
+		}
+		names := make([]string, len(f.Options))
+		for i, o := range f.Options {
+			names[i] = o.Name
+		}
+		return names, nil
+	}
+	return nil, fmt.Errorf("project %s/#%d has no status field (id %q)", cfg.Owner, cfg.Number, cfg.StatusFieldID)
+}
+
 // ProjectStatusField fetches the Status single-select field plus its
 // options for the given project. Returns a typed error when no field
 // named "Status" exists.

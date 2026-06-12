@@ -7,6 +7,7 @@
 package issue
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/nicomaioli-skinandme/dotfiles/sam/internal/ghx"
@@ -29,18 +30,47 @@ type Issue struct {
 	Title      string
 }
 
-// filterBacklog returns items whose repo is in repos AND status is in
-// statuses. Pure for testability.
-func filterBacklog(items []ghx.ProjectItem, repos, statuses []string) []ghx.ProjectItem {
-	out := make([]ghx.ProjectItem, 0, len(items))
+// Filter narrows the issues List returns. The zero value means "every open
+// issue" (all columns). Fields are AND-combined; an empty field matches any.
+// New facets (assignee, repo, …) become new fields here, so both the TUI and
+// the CLI keep calling the same List with a richer Filter rather than growing
+// parallel methods.
+type Filter struct {
+	Columns []string // status columns to include; empty = all columns
+}
+
+// filterByColumns keeps issues whose Status is in columns. An empty columns
+// slice is a no-op (all pass). Pure for testability.
+func filterByColumns(issues []Issue, columns []string) []Issue {
+	if len(columns) == 0 {
+		return issues
+	}
+	out := make([]Issue, 0, len(issues))
+	for _, iss := range issues {
+		if slices.Contains(columns, iss.Status) {
+			out = append(out, iss)
+		}
+	}
+	return out
+}
+
+// issueKey is the stable repo#number identity used to intersect board items
+// with a repo's open-issue list (and matches the TUI's row IDs).
+func issueKey(repo string, num int) string {
+	return fmt.Sprintf("%s#%d", repo, num)
+}
+
+// filterOpenBoard keeps the board items whose (repo, number) is in open and
+// maps them to Issues, preserving each item's column (Status). Items in repos
+// absent from open (i.e. not in IssueRepos) and non-open items (closed issues,
+// PRs, draft items — none of which appear in `gh issue list`) are dropped.
+// Pure for testability.
+func filterOpenBoard(items []ghx.ProjectItem, open map[string]bool) []Issue {
+	out := make([]Issue, 0, len(items))
 	for _, it := range items {
-		if !slices.Contains(repos, it.Content.Repository) {
-			continue
+		if open[issueKey(it.Content.Repository, it.Content.Number)] {
+			out = append(out, fromProjectItem(it))
 		}
-		if !slices.Contains(statuses, it.Status) {
-			continue
-		}
-		out = append(out, it)
 	}
 	return out
 }

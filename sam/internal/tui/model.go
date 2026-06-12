@@ -24,6 +24,18 @@ const (
 	modeCommand
 )
 
+// paneFocus is which pane normal-mode keys drive on a faceted view: the main
+// list (default) or the filter sidebar.
+type paneFocus int
+
+const (
+	focusMain paneFocus = iota
+	focusSidebar
+)
+
+// sidebarWidth is the fixed column width of the filter sidebar.
+const sidebarWidth = 26
+
 // model is the root bubbletea model. It is a pointer model: Update
 // mutates in place and returns the same pointer.
 type model struct {
@@ -45,6 +57,7 @@ type model struct {
 
 	issues  map[string]issue.Issue // resolved issues by Item.ID (ResIssues)
 	prs     map[string]pr.PR       // resolved PRs by Item.ID (ResPRs)
+	columns []string               // project columns in board order (ResIssues), seeds the sidebar filter
 	pending *fromIssueState        // in-flight from-issue flow, if any
 
 	log        *slog.Logger          // diagnostic sink (never nil; discards when unset)
@@ -53,10 +66,12 @@ type model struct {
 	logEntries map[string]logx.Entry // entries backing the current logs list, keyed by Item.ID
 	logIcon    hitRegion             // where renderStatusBar last drew the ⚠ icon, for click hit-testing
 
-	mode   inputMode
-	input  textinput.Model
-	ac     autocomplete // `:` command popup
-	styles styles       // palette-derived render styles
+	mode    inputMode
+	input   textinput.Model
+	ac      autocomplete // `:` command popup
+	sidebar sidebar      // facet filter panel (issue columns, log levels)
+	focus   paneFocus    // which pane normal-mode keys drive (faceted views only)
+	styles  styles       // palette-derived render styles
 
 	loading  bool
 	deleting map[string]bool // worktree IDs with an in-flight delete
@@ -125,6 +140,7 @@ func newModel(workspaceName string, workspace *config.Workspace, all map[string]
 		input:         ti,
 		spinner:       sp,
 		ac:            newAutocomplete(tuiCfg.Autocomplete.Max, st),
+		sidebar:       newSidebar(sidebarWidth, st),
 		styles:        st,
 		log:           logger,
 		ring:          deps.LogRing,
@@ -226,7 +242,15 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleInputKey(msg)
 	}
 
-	// Normal mode.
+	// Normal mode. On faceted views the sidebar may claim the key (pane
+	// switching, or navigation/toggle while it's focused) before the main-list
+	// bindings run.
+	if m.hasSidebar() {
+		if handled, model, cmd := m.handleSidebarKey(key); handled {
+			return model, cmd
+		}
+	}
+
 	switch key {
 	case "j", "down":
 		m.moveCursor(1)
@@ -334,6 +358,7 @@ func (m *model) back() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.popView()
+	m.focusMainPane()
 	return m, m.reloadCurrent()
 }
 
@@ -405,28 +430,152 @@ func (m *model) switchResource(r Resource) tea.Cmd {
 	m.status = ""
 	m.items = nil // avoid showing the previous resource's rows/count mid-load
 	m.filtered = nil
+	// Drop the previous resource's filter facets and return focus to the main
+	// list; the load re-seeds the sidebar for the new resource.
+	m.columns = nil
+	m.sidebar.SetSections(nil)
+	m.focusMainPane()
 	return m.loadResource()
 }
 
-// applyFilter recomputes filtered from items and the current query, and
-// clamps the cursor.
+// applyFilter recomputes filtered from items: the `/` substring query AND the
+// sidebar's active facets must both pass. Cursor is clamped to the result.
 func (m *model) applyFilter() {
-	if m.query == "" {
-		m.filtered = m.items
-	} else {
-		needle := strings.ToLower(m.query)
-		out := make([]Item, 0, len(m.items))
-		for _, it := range m.items {
-			if strings.Contains(strings.ToLower(it.Title+" "+it.Detail), needle) {
-				out = append(out, it)
-			}
+	needle := strings.ToLower(m.query)
+	out := make([]Item, 0, len(m.items))
+	for _, it := range m.items {
+		if needle != "" && !strings.Contains(strings.ToLower(it.Title+" "+it.Detail), needle) {
+			continue
 		}
-		m.filtered = out
+		if !m.facetPass(it) {
+			continue
+		}
+		out = append(out, it)
 	}
+	m.filtered = out
 	if m.cursor >= len(m.filtered) {
 		m.cursor = len(m.filtered) - 1
 	}
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
+}
+
+// facetPass reports whether an item survives the sidebar's active facet
+// toggles. A view with no facet section seeded (worktrees, non-project issues,
+// logs before load) passes everything; a section present but with everything
+// toggled off passes nothing.
+func (m *model) facetPass(it Item) bool {
+	switch m.resource {
+	case ResIssues:
+		if !m.sidebar.hasSection("columns") {
+			return true
+		}
+		return m.sidebar.Selected("columns")[m.issues[it.ID].Status]
+	case ResLogs:
+		if !m.sidebar.hasSection("level") {
+			return true
+		}
+		return m.sidebar.Selected("level")[levelLabel(m.logEntries[it.ID].Level)]
+	}
+	return true
+}
+
+// hasSidebar reports whether the current view shows the filter sidebar: the
+// logs view always, the issues view once a project produced columns.
+func (m *model) hasSidebar() bool {
+	switch m.resource {
+	case ResLogs:
+		return true
+	case ResIssues:
+		return m.sidebar.hasSection("columns")
+	}
+	return false
+}
+
+// focusMainPane returns keyboard focus to the main list and blurs the sidebar.
+func (m *model) focusMainPane() {
+	m.focus = focusMain
+	m.sidebar.SetFocused(false)
+}
+
+// handleSidebarKey gives the filter sidebar first refusal on a normal-mode key
+// on faceted views. h/l switch panes (h→sidebar, l→main); while the sidebar is
+// focused, j/k navigate it and enter/space toggle the highlighted row. It
+// returns handled=false for keys it doesn't claim (`:`, `/`, `esc`, `?`, …) so
+// they fall through to the shared bindings — notably esc still backs out.
+func (m *model) handleSidebarKey(key string) (bool, tea.Model, tea.Cmd) {
+	switch key {
+	case "h", "left":
+		m.focus = focusSidebar
+		m.sidebar.SetFocused(true)
+		return true, m, nil
+	case "l", "right":
+		m.focusMainPane()
+		return true, m, nil
+	}
+	if m.focus != focusSidebar {
+		return false, m, nil
+	}
+	switch key {
+	case "j", "down":
+		m.sidebar.Move(1)
+		return true, m, nil
+	case "k", "up":
+		m.sidebar.Move(-1)
+		return true, m, nil
+	case "enter", " ", "space":
+		m.sidebar.Act()
+		m.applyFilter()
+		return true, m, nil
+	}
+	return false, m, nil
+}
+
+// syncSidebar rebuilds the filter sections for the current resource from the
+// freshly loaded data and config, preserving prior toggles (SetSections
+// merges). Called after a load lands.
+func (m *model) syncSidebar() {
+	switch m.resource {
+	case ResIssues:
+		if len(m.columns) == 0 {
+			m.sidebar.SetSections(nil)
+			return
+		}
+		def := m.defaultColumns()
+		items := make([]sidebarItem, len(m.columns))
+		for i, c := range m.columns {
+			items[i] = sidebarItem{label: c, on: def[c]}
+		}
+		m.sidebar.SetSections([]sidebarSection{{key: "columns", title: "Columns", items: items}})
+	case ResLogs:
+		labels := []string{"ERROR", "WARN", "INFO", "DEBUG"}
+		items := make([]sidebarItem, len(labels))
+		for i, l := range labels {
+			items[i] = sidebarItem{label: l, on: true}
+		}
+		m.sidebar.SetSections([]sidebarSection{{key: "level", title: "Level", items: items}})
+	default:
+		m.sidebar.SetSections(nil)
+	}
+}
+
+// defaultColumns is the set of columns toggled on by default: the workspace's
+// configured backlog statuses, or every column when none are configured.
+func (m *model) defaultColumns() map[string]bool {
+	def := map[string]bool{}
+	var backlog []string
+	if m.workspace != nil {
+		backlog = m.workspace.GhProject.BacklogStatuses
+	}
+	if len(backlog) == 0 {
+		for _, c := range m.columns {
+			def[c] = true
+		}
+		return def
+	}
+	for _, s := range backlog {
+		def[s] = true
+	}
+	return def
 }

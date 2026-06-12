@@ -21,6 +21,7 @@ type itemsLoadedMsg struct {
 	branchPick bool
 	items      []Item
 	issues     map[string]issue.Issue // resolved issues, keyed by Item.ID (ResIssues only)
+	columns    []string               // project columns in board order (ResIssues only), seeds the sidebar
 	prs        map[string]pr.PR       // resolved PRs, keyed by Item.ID (ResPRs only)
 	logs       map[string]logx.Entry  // log entries, keyed by Item.ID (ResLogs only)
 	status     string                 // non-fatal note shown in the status line (e.g. "no issues")
@@ -78,7 +79,11 @@ func (m *model) applyLoaded(msg itemsLoadedMsg) {
 	}
 	m.issues = msg.issues
 	m.prs = msg.prs
+	m.columns = msg.columns
 	m.logEntries = msg.logs
+	// Rebuild the filter sidebar for this resource (issue columns / log levels),
+	// preserving any prior toggles across a reload-in-place.
+	m.syncSidebar()
 	// Leave the cursor where it is — a reload-in-place (back nav, R, attach,
 	// delete) keeps the highlight on its row, clamped to the new list by
 	// applyFilter. Fresh views (switchResource, add) pre-zero the cursor
@@ -145,7 +150,13 @@ func (m *model) loadIssues() tea.Cmd {
 	ws := m.workspace
 	ctrl := m.deps.Issues
 	return func() tea.Msg {
-		issues, err := ctrl.List(ws)
+		// Fetch every open board issue (zero Filter = all columns); the sidebar
+		// filters by column client-side. Columns seed that sidebar.
+		issues, err := ctrl.List(ws, issue.Filter{})
+		if err != nil {
+			return itemsLoadedMsg{resource: ResIssues, err: err}
+		}
+		columns, err := ctrl.Columns(ws)
 		if err != nil {
 			return itemsLoadedMsg{resource: ResIssues, err: err}
 		}
@@ -163,12 +174,12 @@ func (m *model) loadIssues() tea.Cmd {
 		status := ""
 		if len(items) == 0 {
 			if ctrl.HasGhProject(ws) {
-				status = "no backlog issues"
+				status = "no open issues on the board"
 			} else {
 				status = "no open issues in " + ws.BranchRepo
 			}
 		}
-		return itemsLoadedMsg{resource: ResIssues, items: items, issues: byID, status: status}
+		return itemsLoadedMsg{resource: ResIssues, items: items, issues: byID, columns: columns, status: status}
 	}
 }
 

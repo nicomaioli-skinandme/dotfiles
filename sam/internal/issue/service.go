@@ -24,29 +24,53 @@ func (Service) HasGhProject(ws *config.Workspace) bool {
 	return ws.GhProject.Owner != "" && ws.GhProject.Number != 0
 }
 
-// List returns the candidate issues for the workspace: the project backlog
-// when a GitHub Project is configured, otherwise open issues from the
-// branch repo.
-func (s Service) List(ws *config.Workspace) ([]Issue, error) {
-	if s.HasGhProject(ws) {
-		return s.Backlog(ws)
+// List returns the workspace's open issues, narrowed by filter. With a GitHub
+// Project it returns the open board issues (every column by default, or just
+// filter.Columns when set), each carrying its column (Status); PRs, draft
+// items, and closed issues are excluded by intersecting the board items with
+// each IssueRepos repo's open-issue list (only open issues appear in
+// `gh issue list`). With no project it returns the branch repo's open issues
+// and ignores filter (no columns exist). The TUI passes a zero Filter and
+// toggles columns client-side; the CLI passes its configured backlog columns
+// (or, eventually, flag-supplied ones).
+func (s Service) List(ws *config.Workspace, filter Filter) ([]Issue, error) {
+	if !s.HasGhProject(ws) {
+		return s.OpenIssues(ws)
 	}
-	return s.OpenIssues(ws)
-}
-
-// Backlog returns project-board items whose repo and status mark them as
-// backlog (see config.GhProject.IssueRepos / BacklogStatuses).
-func (Service) Backlog(ws *config.Workspace) ([]Issue, error) {
 	items, err := ghx.ProjectItems(ws.GhProject)
 	if err != nil {
 		return nil, err
 	}
-	backlog := filterBacklog(items, ws.GhProject.IssueRepos, ws.GhProject.BacklogStatuses)
-	out := make([]Issue, len(backlog))
-	for i, it := range backlog {
-		out[i] = fromProjectItem(it)
+	open, err := openKeys(ws.GhProject.IssueRepos)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	return filterByColumns(filterOpenBoard(items, open), filter.Columns), nil
+}
+
+// Columns returns the project's status columns in board order, for seeding the
+// TUI's column filter. Empty when no GitHub Project is configured.
+func (s Service) Columns(ws *config.Workspace) ([]string, error) {
+	if !s.HasGhProject(ws) {
+		return nil, nil
+	}
+	return ghx.StatusColumns(ws.GhProject)
+}
+
+// openKeys builds the set of repo#number identities for the open issues across
+// the given repos (one `gh issue list` per repo).
+func openKeys(repos []string) (map[string]bool, error) {
+	set := make(map[string]bool)
+	for _, repo := range repos {
+		issues, err := ghx.IssueList(repo)
+		if err != nil {
+			return nil, err
+		}
+		for _, iss := range issues {
+			set[issueKey(repo, iss.Number)] = true
+		}
+	}
+	return set, nil
 }
 
 // OpenIssues returns open issues from the branch repo.

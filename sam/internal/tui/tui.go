@@ -7,6 +7,12 @@
 // `:clankers`) or quits (`:q`). `<CR>` activates the highlighted row, and
 // `a`/`d` add/delete where the current resource supports it.
 //
+// Faceted views (`:issues`, `:logs`) carry an always-open filter sidebar on
+// the left: `h`/`l` move focus between the sidebar and the main list, and with
+// the sidebar focused `j`/`k` move and `<CR>`/space toggle a column / log level
+// on or off (or collapse a section header). The sidebar filter composes with
+// the `/` search — a row must pass both. See sidebar.go.
+//
 // Activating a row attaches to its tmux session without ending the
 // program: the model suspends via tea.ExecProcess (outside tmux) or
 // switch-client (inside tmux), runs the tmux client as a child, and
