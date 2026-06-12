@@ -53,7 +53,10 @@ func newListCmd(ctrl issue.Controller, resolve Resolve, format Format) *cobra.Co
 			if err != nil {
 				return err
 			}
-			issues, err := ctrl.List(ws)
+			// Default to the configured backlog columns (ignored when no
+			// GitHub Project). Flag-supplied column filters would populate
+			// issue.Filter here.
+			issues, err := ctrl.List(ws, issue.Filter{Columns: ws.GhProject.BacklogStatuses})
 			if err != nil {
 				return err
 			}

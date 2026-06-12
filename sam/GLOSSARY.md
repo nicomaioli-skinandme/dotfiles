@@ -39,6 +39,10 @@ Two annotations appear on entries:
 ## GitHub
 
 - **issue** — a GitHub issue.
+- **column** — a column of a **GitHub Project** board: one option of its Status
+  field (e.g. "Backlog", "In Progress", "Done"). The issues view's filter
+  sidebar toggles which columns are shown. _Alias:_ status (the Project field a
+  column is an option of). Not a database/table column.
 - **pull request** — a GitHub pull request. _Alias:_ PR. sam surfaces the
   open PRs in a workspace's repo that request you as a reviewer via the
   **prs** view; selecting one creates a **worktree** on the PR's head

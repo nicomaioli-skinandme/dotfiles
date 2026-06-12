@@ -15,29 +15,55 @@ func mkItem(id string, num int, repo, title, status string, assignees ...string)
 	return it
 }
 
-func TestFilterBacklog(t *testing.T) {
-	items := []ghx.ProjectItem{
-		mkItem("a", 1, "org/api", "in scope", "📋 Backlog"),
-		mkItem("b", 2, "org/web", "wrong repo", "📋 Backlog"),
-		mkItem("c", 3, "org/api", "wrong status", "🏗 In Progress"),
-		mkItem("d", 4, "org/api", "platform", "Platform Backlog"),
+func TestFilterByColumns(t *testing.T) {
+	issues := []Issue{
+		{Number: 1, Status: "📋 Backlog"},
+		{Number: 2, Status: "🏗 In Progress"},
+		{Number: 3, Status: "Platform Backlog"},
+		{Number: 4, Status: "✅ Done"},
 	}
-	repos := []string{"org/api"}
-	statuses := []string{"📋 Backlog", "Platform Backlog"}
+	columns := []string{"📋 Backlog", "Platform Backlog"}
 
-	got := filterBacklog(items, repos, statuses)
+	got := filterByColumns(issues, columns)
+	if len(got) != 2 || got[0].Number != 1 || got[1].Number != 3 {
+		t.Fatalf("filterByColumns = %v, want #1 and #3", got)
+	}
+
+	// Empty columns is a no-op: every issue passes (the TUI's "all columns").
+	if r := filterByColumns(issues, nil); len(r) != len(issues) {
+		t.Errorf("nil columns: got len=%d, want %d", len(r), len(issues))
+	}
+}
+
+func TestFilterOpenBoard(t *testing.T) {
+	items := []ghx.ProjectItem{
+		mkItem("a", 1, "org/api", "open backlog", "📋 Backlog"),
+		mkItem("b", 2, "org/api", "open in-progress", "🏗 In Progress"),
+		mkItem("c", 3, "org/api", "closed/absent", "✅ Done"),
+		mkItem("d", 4, "org/web", "repo not tracked", "📋 Backlog"),
+	}
+	// open holds only the issues `gh issue list --state open` returned for the
+	// tracked repos: #1 and #2 in org/api. #3 is closed (absent), org/web isn't
+	// tracked at all.
+	open := map[string]bool{
+		issueKey("org/api", 1): true,
+		issueKey("org/api", 2): true,
+	}
+
+	got := filterOpenBoard(items, open)
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2 (%v)", len(got), got)
 	}
-	if got[0].ID != "a" || got[1].ID != "d" {
-		t.Errorf("got ids %s,%s; want a,d", got[0].ID, got[1].ID)
+	// Order preserved from items; all columns kept (no status filter).
+	if got[0].Number != 1 || got[0].Status != "📋 Backlog" {
+		t.Errorf("got[0]=%+v, want #1 Backlog", got[0])
+	}
+	if got[1].Number != 2 || got[1].Status != "🏗 In Progress" {
+		t.Errorf("got[1]=%+v, want #2 In Progress", got[1])
 	}
 
-	if r := filterBacklog(nil, repos, statuses); len(r) != 0 {
-		t.Errorf("empty input: got len=%d", len(r))
-	}
-	if r := filterBacklog(items, nil, statuses); len(r) != 0 {
-		t.Errorf("no repos: got len=%d", len(r))
+	if r := filterOpenBoard(items, nil); len(r) != 0 {
+		t.Errorf("nothing open: got len=%d", len(r))
 	}
 }
 

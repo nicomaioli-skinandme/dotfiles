@@ -81,15 +81,45 @@ func (m *model) renderBody() string {
 		return pad(fmt.Sprintf("  %s loading %s…", m.spinner.View(), what), m.width, h)
 	}
 
-	// Empty main list: show a centered empty-state hint.
-	if len(m.filtered) == 0 {
-		return m.renderEmpty(h)
+	// Faceted views show the filter sidebar beside the list.
+	if m.hasSidebar() {
+		return m.renderWithSidebar(h)
 	}
 
-	return m.renderList(h)
+	// Empty main list: show a centered empty-state hint.
+	if len(m.filtered) == 0 {
+		return m.renderEmpty(h, m.width)
+	}
+
+	return m.renderList(h, m.width)
 }
 
-func (m *model) renderList(h int) string {
+// renderWithSidebar lays the filter sidebar (fixed width) to the left of the
+// main list, separated by a faint vertical rule. The list (or its empty state)
+// fills the remaining width.
+func (m *model) renderWithSidebar(h int) string {
+	leftBlock := lipgloss.NewStyle().Width(m.sidebar.Width()).Render(m.sidebar.View(h))
+
+	sepLines := make([]string, h)
+	for i := range sepLines {
+		sepLines[i] = "│"
+	}
+	sep := m.styles.divider.Render(strings.Join(sepLines, "\n"))
+
+	rightW := m.width - m.sidebar.Width() - 3 // sidebar + " │ "
+	if rightW < 1 {
+		rightW = 1
+	}
+	var right string
+	if len(m.filtered) == 0 {
+		right = m.renderEmpty(h, rightW)
+	} else {
+		right = m.renderList(h, rightW)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, " ", sep, " ", right)
+}
+
+func (m *model) renderList(h, width int) string {
 	start := 0
 	if len(m.filtered) > h {
 		start = m.cursor - h/2
@@ -105,9 +135,14 @@ func (m *model) renderList(h int) string {
 		end = len(m.filtered)
 	}
 
+	// On faceted views the main list's cursor is "active" (highlighted) only
+	// while the main pane holds focus; with the sidebar focused it stays
+	// visible but muted so the two panes don't both look selected.
+	active := !m.hasSidebar() || m.focus == focusMain
+
 	lines := make([]string, 0, h)
 	for i := start; i < end; i++ {
-		lines = append(lines, m.renderRow(m.filtered[i], i == m.cursor))
+		lines = append(lines, m.renderRow(m.filtered[i], i == m.cursor, active, width))
 	}
 	for len(lines) < h {
 		lines = append(lines, "")
@@ -115,14 +150,18 @@ func (m *model) renderList(h int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *model) renderRow(it Item, isCursor bool) string {
+func (m *model) renderRow(it Item, isCursor, active bool, width int) string {
 	if m.resource == ResLogs {
-		return m.renderLogRow(it, isCursor)
+		return m.renderLogRow(it, isCursor, active, width)
 	}
 
 	cursor := "  "
 	if isCursor {
-		cursor = m.styles.cursor.Render("▸ ")
+		if active {
+			cursor = m.styles.cursor.Render("▸ ")
+		} else {
+			cursor = m.styles.hint.Render("▸ ")
+		}
 	}
 
 	sel := " "
@@ -136,7 +175,7 @@ func (m *model) renderRow(it Item, isCursor bool) string {
 	}
 
 	title := it.Title
-	if isCursor {
+	if isCursor && active {
 		title = m.styles.cursor.Render(title)
 	} else {
 		title = m.styles.row.Render(title)
@@ -149,17 +188,21 @@ func (m *model) renderRow(it Item, isCursor bool) string {
 	case it.Detail != "":
 		line += "  " + m.styles.detail.Render("("+it.Detail+")")
 	}
-	return truncate(line, m.width)
+	return truncate(line, width)
 }
 
 // renderLogRow draws a `:logs` row: a faint timestamp, a severity-coloured
 // level, and the message. The full detail is shown in the detail modal on
 // activate. The entry is looked up by Item.ID (filtering reorders rows, so
 // the slice index is unreliable).
-func (m *model) renderLogRow(it Item, isCursor bool) string {
+func (m *model) renderLogRow(it Item, isCursor, active bool, width int) string {
 	cursor := "  "
 	if isCursor {
-		cursor = m.styles.cursor.Render("▸ ")
+		if active {
+			cursor = m.styles.cursor.Render("▸ ")
+		} else {
+			cursor = m.styles.hint.Render("▸ ")
+		}
 	}
 
 	e := m.logEntries[it.ID]
@@ -167,13 +210,29 @@ func (m *model) renderLogRow(it Item, isCursor bool) string {
 	level := m.logLevelStyle(e.Level).Render(fmt.Sprintf("%-5s", e.Level.String()))
 
 	msg := it.Title
-	if isCursor {
+	if isCursor && active {
 		msg = m.styles.cursor.Render(msg)
 	} else {
 		msg = m.styles.row.Render(msg)
 	}
 
-	return truncate(fmt.Sprintf("%s%s %s  %s", cursor, ts, level, msg), m.width)
+	return truncate(fmt.Sprintf("%s%s %s  %s", cursor, ts, level, msg), width)
+}
+
+// levelLabel buckets a log level into one of the four filterable names,
+// mirroring logLevelStyle's thresholds, so a non-standard level (e.g.
+// ERROR+2) still maps to a sidebar toggle.
+func levelLabel(l slog.Level) string {
+	switch {
+	case l >= slog.LevelError:
+		return "ERROR"
+	case l >= slog.LevelWarn:
+		return "WARN"
+	case l >= slog.LevelInfo:
+		return "INFO"
+	default:
+		return "DEBUG"
+	}
 }
 
 // logLevelStyle maps a log level to a palette style: ERROR→destroy,
@@ -194,20 +253,23 @@ func (m *model) logLevelStyle(l slog.Level) lipgloss.Style {
 // renderEmpty centers an empty-state hint when the current list has no
 // rows: a short message plus a navigation hint (or, for logs, the path
 // the log is being written to).
-func (m *model) renderEmpty(h int) string {
+func (m *model) renderEmpty(h, width int) string {
 	msg := "no items"
 	hint := "press : to switch resource"
 	switch {
 	case m.branchPick:
 		msg = "no branches available"
 	case m.resource == ResLogs:
-		msg = "no log entries yet"
+		msg = "no log entries match"
 		if m.logPath != "" {
 			hint = "writing to " + m.logPath
 		}
+	case m.resource == ResIssues && m.hasSidebar():
+		msg = "no issues in the selected columns"
+		hint = "h to focus filters · space to toggle"
 	}
 	body := m.styles.hint.Render(msg + "\n\n" + hint)
-	return pad(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, body), m.width, h)
+	return pad(lipgloss.Place(width, h, lipgloss.Center, lipgloss.Center, body), width, h)
 }
 
 func (m *model) renderStatusBar() string {
@@ -342,6 +404,16 @@ func (m *model) renderModal() string {
 	return m.styles.modalBorder.Render(body)
 }
 
+// sidebarHelp is the extra help block shown on faceted views (issues, logs),
+// where h/l switch panes and the sidebar filters the list.
+var sidebarHelp = []string{
+	"",
+	"  Filter sidebar",
+	"  h / l     focus sidebar / main list",
+	"  j / k     move within the focused pane",
+	"  space / ⏎ toggle column-level / collapse section",
+}
+
 // helpText lists the bindings available in the current context.
 func (m *model) helpText() string {
 	lines := []string{
@@ -370,8 +442,12 @@ func (m *model) helpText() string {
 		lines = append(lines, "", "  enter     switch workspace", "  a         add workspace")
 	case m.resource == ResPRs:
 		lines = append(lines, "", "  enter     create worktree from PR")
+	case m.resource == ResIssues:
+		lines = append(lines, "", "  enter     develop issue (main list)")
+		lines = append(lines, sidebarHelp...)
 	case m.resource == ResLogs:
-		lines = append(lines, "", "  enter     view full entry")
+		lines = append(lines, "", "  enter     view full entry (main list)")
+		lines = append(lines, sidebarHelp...)
 	}
 	return strings.Join(lines, "\n")
 }
