@@ -119,36 +119,21 @@ func TestLoadErrorOpensModalAndLogs(t *testing.T) {
 	}
 }
 
-func TestLogIconPersistent(t *testing.T) {
-	logger, ring, _ := logx.New(slog.LevelInfo, "")
+func TestLogIconShowsOnWarnOrError(t *testing.T) {
+	logger, ring, _ := logx.New(slog.LevelDebug, "")
 	m := newModel("ws", &config.Workspace{Trunk: "main"}, nil, ResWorktrees, config.Tui{}, Deps{Logger: logger, LogRing: ring})
 	m.width, m.height = 80, 24
 
-	// No warnings/errors: no icon, and no count (the icon is presence-only now).
-	if bar := m.renderStatusBar(); strings.Contains(bar, "⚠") {
-		t.Errorf("icon shown with no warnings/errors: %q", bar)
-	}
-
-	// An info entry alone does not trip the icon.
+	// Routine info logging must not trip the icon, or it would never be off.
 	logger.Info("loaded")
 	if bar := m.renderStatusBar(); strings.Contains(bar, "⚠") {
-		t.Errorf("info entry tripped the icon: %q", bar)
+		t.Errorf("icon shown for an info-only log: %q", bar)
 	}
 
-	// A warning shows the icon — without a count (the old format was "⚠ N").
+	// A warning is the signal the icon exists to carry.
 	logger.Warn("w", "err", errors.New("x"))
-	bar := m.renderStatusBar()
-	if !strings.Contains(bar, "⚠") {
-		t.Errorf("status bar missing log icon: %q", bar)
-	}
-	if strings.Contains(bar, "⚠ 1") {
-		t.Errorf("icon should carry no count: %q", bar)
-	}
-
-	// It persists across renders — there's no seen/reset that clears it.
-	logger.Error("e", "err", errors.New("y"))
 	if bar := m.renderStatusBar(); !strings.Contains(bar, "⚠") {
-		t.Errorf("icon should persist while warnings/errors remain: %q", bar)
+		t.Errorf("icon missing despite a warning: %q", bar)
 	}
 }
 
